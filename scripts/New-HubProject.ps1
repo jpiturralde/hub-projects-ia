@@ -1,7 +1,7 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Crea un proyecto hijo dentro de projects/ del hub ingenia-hub-ia.
+  Crea un proyecto hijo dentro de projects/ del hub hub-projects-ia.
 
 .DESCRIPTION
   Wrapper de New-ConsultingCopilotProject.ps1 que:
@@ -11,15 +11,18 @@
   - Registra el proyecto en hub-registry.json
 
 .EXAMPLE
-  .\New-HubProject.ps1 -StackProfile Full `
+  .\New-HubProject.ps1 -StackProfile ConsultingAI `
     -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
     -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $false)]
-  [ValidateSet('GentleAi', 'Consulting', 'Full')]
+  [ValidateSet('GentleAi', 'Consulting', 'ConsultingAI', 'Full')]
   [string] $StackProfile,
+
+  [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')]
+  [string] $GentleAiScope = 'Auto',
 
   [Parameter(Mandatory = $false)]
   [string] $ProjectName,
@@ -68,7 +71,7 @@ param(
   [switch] $IncludeArchiMcp,
 
   [Parameter(Mandatory = $false)]
-  [bool] $IncludeClaudeCoworkLayer = $true,
+  [bool] $IncludeClaudeCoworkLayer = $false,
 
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipGitInit,
@@ -133,10 +136,10 @@ function Resolve-HubProjectFolderName {
     }
     default {
       if ([string]::IsNullOrWhiteSpace($ClientSlugValue)) {
-        throw 'Para Consulting/Full indicá -ClientSlug o -ProjectFolderName.'
+        throw 'Para Consulting/ConsultingAI indicá -ClientSlug o -ProjectFolderName.'
       }
       if ([string]::IsNullOrWhiteSpace($InitiativeIdValue)) {
-        throw 'Para Consulting/Full indicá -InitiativeId o -ProjectFolderName.'
+        throw 'Para Consulting/ConsultingAI indicá -InitiativeId o -ProjectFolderName.'
       }
       $init = $InitiativeIdValue.Trim().ToLowerInvariant()
       return "$ClientSlugValue-$init"
@@ -172,12 +175,14 @@ function Add-HubRegistryEntry {
 }
 
 if ([string]::IsNullOrWhiteSpace($StackProfile)) {
-  $choice = Read-ConsultingPrompt 'Perfil (GentleAi | Consulting | Full)' 'Full'
+  $choice = Read-ConsultingPrompt 'Perfil (ConsultingAI | Consulting | GentleAi)' 'ConsultingAI'
   $StackProfile = switch ($choice.Trim().ToLowerInvariant()) {
     'gentle-ai' { 'GentleAi' }
     'gentleai' { 'GentleAi' }
     'consulting' { 'Consulting' }
     'consulting-only' { 'Consulting' }
+    'consultingai' { 'ConsultingAI' }
+    'consulting-ai' { 'ConsultingAI' }
     'full' { 'Full' }
     default { $choice }
   }
@@ -222,10 +227,10 @@ if ($IncludeArchiMcp -and ($null -eq $ArchiMcpArgs -or $ArchiMcpArgs.Count -eq 0
 $genParams = @{
   TargetPath               = $TargetPath
   StackProfile             = $StackProfile
+  GentleAiScope            = $GentleAiScope
   ConsultancyName          = $ConsultancyName
   CorporateDocxTemplateName = $CorporateDocxTemplateName
   IncludeDrawioMcp         = $IncludeDrawioMcp
-  IncludeClaudeCoworkLayer = $IncludeClaudeCoworkLayer
   Force                    = $Force
 }
 
@@ -245,6 +250,7 @@ if ($ArchiMcpArgs -and $ArchiMcpArgs.Count -gt 0) { $genParams.ArchiMcpArgs = $A
 if ($PSBoundParameters.ContainsKey('EngramPath')) { $genParams.EngramPath = $EngramPath }
 if ($PSBoundParameters.ContainsKey('IncludeBacklogMcp')) { $genParams.IncludeBacklogMcp = $IncludeBacklogMcp }
 if ($PSBoundParameters.ContainsKey('IncludeArchiMcp')) { $genParams.IncludeArchiMcp = $IncludeArchiMcp }
+if ($PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) { $genParams.IncludeClaudeCoworkLayer = $IncludeClaudeCoworkLayer }
 if ($SkipSkillRegistryRefresh) { $genParams.SkipSkillRegistryRefresh = $true }
 $genParams.SkipHandoffSummary = $true
 
@@ -275,10 +281,18 @@ if (-not $SkipGitInit) {
   }
 }
 
+$registryProfile = $StackProfile
+$generatedMetaPath = Join-Path $TargetPath '.consulting-engagement.json'
+if (Test-Path -LiteralPath $generatedMetaPath) {
+  $generatedMeta = Get-Content -LiteralPath $generatedMetaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($generatedMeta.stackProfile -eq 'consulting-only') { $registryProfile = 'Consulting' }
+  elseif ($generatedMeta.stackProfile -eq 'consulting-ai') { $registryProfile = 'ConsultingAI' }
+}
+
 $entry = [ordered]@{
   folderName     = $folderName
   absolutePath   = $TargetPath
-  stackProfile   = $StackProfile
+  stackProfile   = $registryProfile
   createdAt      = (Get-Date).ToString('o')
   gitInitialized = $gitInitialized
 }
@@ -295,8 +309,18 @@ if ($StackProfile -eq 'GentleAi') {
 Add-HubRegistryEntry -RegistryFile $RegistryPath -Entry $entry
 
 $gettingStartedPath = Join-Path $TargetPath 'docs\GETTING-STARTED.md'
+$resolvedGentleScope = 'None'
+$engagementMetaPath = Join-Path $TargetPath '.consulting-engagement.json'
+$projectMetaPath = Join-Path $TargetPath '.project-profile.json'
+foreach ($metaPath in @($engagementMetaPath, $projectMetaPath)) {
+  if (Test-Path -LiteralPath $metaPath) {
+    $meta = Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($meta.gentleAiScope) { $resolvedGentleScope = [string]$meta.gentleAiScope }
+    break
+  }
+}
 Write-Host "Registro: $RegistryPath"
-Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $StackProfile -GettingStartedPath $gettingStartedPath
+Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $registryProfile -GettingStartedPath $gettingStartedPath -GentleAiScope $resolvedGentleScope
 
 if (-not $SkipOpenCursor) {
   Invoke-OpenCursorWorkspace -TargetPath $TargetPath | Out-Null

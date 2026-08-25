@@ -1,9 +1,9 @@
 ---
-description: Router del workspace ingenia-hub-ia — generador de proyectos, no un encargo de consultoría.
+description: Router del workspace hub-projects-ia — generador de proyectos, no un encargo de consultoría.
 alwaysApply: false
 ---
 
-# Ingenia Hub — workspace raíz
+# Hub Projects IA — workspace raíz
 
 Este repositorio es el **hub generador y evolución del template** Consulting Copilot. **No** es un encargo de cliente.
 
@@ -11,7 +11,7 @@ Este repositorio es el **hub generador y evolución del template** Consulting Co
 
 | Modo | Workspace raíz | Qué hacer |
 |------|----------------|-----------|
-| **Hub** | `ingenia-hub-ia/` (esta carpeta) | Crear proyectos, mantener `skeleton/` y `overlays/` |
+| **Hub** | `hub-projects-ia/` (esta carpeta) | Crear proyectos, mantener `skeleton/` y `overlays/` |
 | **Encargo** | `projects/<nombre>/` | Bootstrap, SPEC, entregables, CDD/SDD |
 
 Si el usuario trabaja en documentación de cliente, diagramas ArchiMate o entregables, **pedir que abra el proyecto hijo** como workspace raíz.

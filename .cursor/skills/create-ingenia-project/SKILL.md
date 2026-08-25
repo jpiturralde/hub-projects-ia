@@ -1,13 +1,13 @@
 ---
 name: create-ingenia-project
-description: Guía conversacional para crear un proyecto hijo en ingenia-hub-ia (GentleAi, Consulting o Full). Usar cuando el usuario pida "crear proyecto", "nuevo encargo", "generar repo para cliente", o similar desde la raíz del hub.
+description: Guía conversacional para crear un proyecto hijo en hub-projects-ia (GentleAi, Consulting o Full). Usar cuando el usuario pida "crear proyecto", "nuevo encargo", "generar repo para cliente", o similar desde la raíz del hub.
 ---
 
-# Crear proyecto — Ingenia Hub
+# Crear proyecto — Hub Projects IA
 
 ## Cuándo usar esta skill
 
-- El workspace raíz es **`ingenia-hub-ia`** (hub), no un proyecto bajo `projects/`.
+- El workspace raíz es **`hub-projects-ia`** (hub), no un proyecto bajo `projects/`.
 - El usuario quiere **generar un proyecto hijo** nuevo antes de iniciar bootstrap, CDD o SDD.
 
 ## Cuándo NO usar esta skill
@@ -42,7 +42,7 @@ flowchart TD
 Verificar que el usuario ejecutó setup global según el perfil elegido:
 
 ```powershell
-Set-Location "ruta\a\ingenia-hub-ia\scripts"
+Set-Location "ruta\a\hub-projects-ia\scripts"
 .\Install-ConsultingCopilot.ps1 -StackProfile Full   # o GentleAi / Consulting
 ```
 

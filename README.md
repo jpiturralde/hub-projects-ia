@@ -1,119 +1,89 @@
-# Ingenia Hub IA — Consulting Copilot
+# Hub Projects IA — Gentle AI para consultoría
 
-Repositorio **padre** que concentra el template Consulting Copilot y orquesta la creación de proyectos hijos. Evolucionás el molde aquí; cada encargo o app vive en su propia carpeta bajo `projects/`.
+Generador de proyectos hijos que extiende los conceptos y políticas de **Gentle AI** a consultoría, arquitectura, documentación, research, assessments, reuniones y entregables.
 
-## Hub vs proyecto hijo
+Gentle AI sigue siendo la autoridad de orquestación, delegación, skills y memoria. El hub agrega perfiles, estructura y workflows de dominio sin copiar su configuración administrada.
 
-| Zona | Responsabilidad | Git |
-|------|-----------------|-----|
-| Raíz (`skeleton/`, `overlays/`, `scripts/`, docs) | Template y generación | Repo padre (`ingenia-hub-ia`) |
-| [`projects/`](projects/) | Encargos y apps generados | **Gitignored** en el padre; cada hijo tiene su propio `git init` |
+## Perfiles
 
-**Crear proyectos:** abrí **esta carpeta** como workspace raíz en Cursor.
-
-**Trabajar en un encargo:** abrí `projects/<nombre>/` como workspace raíz (ej. `projects/iplan-u01/`).
-
-Flujo operativo detallado: [`HUB-WORKFLOW.md`](HUB-WORKFLOW.md).
-
-## Perfiles disponibles
-
-| Perfil | Uso |
-|--------|-----|
-| **Consulting** | Solo consultoría (entregables, diagramas, ArchiMate) |
-| **Full** | Consultoría + Gentle AI (`gentle-ai install` + overlay CDD) |
-| **GentleAi** | Solo desarrollo (SDD, Engram) |
+| Perfil | Uso | Gentle AI |
+|---|---|---|
+| **ConsultingAI** | Default: consultoría + Consulting-Driven Delivery (CDD) | Requerido |
+| **Full** | Alias retrocompatible de ConsultingAI | Requerido |
+| **GentleAi** | Proyecto de desarrollo con skeleton mínimo | Requerido |
+| **Consulting** | Fallback de consultoría sin CDD/Engram | No requerido |
 
 Detalle: [docs/STACK-PROFILES.md](docs/STACK-PROFILES.md).
 
-## Requisitos
+## Política de instalación
 
-- **Windows**: PowerShell 5.1+
-- **IDE con MCP** (p. ej. [Cursor Desktop](https://cursor.com))
-- Perfil **Full/GentleAi**: `gentle-ai` + `engram` en PATH
-- Perfil **Consulting/Full**: Node.js LTS (draw.io MCP), Pandoc (opcional)
+1. Detectar todos los ejecutables `gentle-ai`; si hay más de uno, detenerse y mostrar las rutas.
+2. Si existe configuración global para Cursor, reutilizarla automáticamente.
+3. Con global existente, **no mostrar ni permitir** instalación workspace.
+4. Sólo si no existe global, preguntar: Global (recomendado), Proyecto o Cancelar.
+5. Si falta el CLI, preguntar si se instala el canal estable con Go; ConsultingAI también permite elegir el fallback Consulting.
+6. Engram lo administra Gentle AI. El generador nunca lo agrega al MCP local.
+7. Si detecta global + workspace o Engram duplicado, diagnostica y se detiene; no borra ni reescribe archivos administrados.
 
-MCP: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md)
+La documentación oficial confirma que el alcance default es global, que `--scope=workspace` escribe archivos del agente en el proyecto y que las integraciones global-only siguen siendo globales: [Gentle AI README](https://github.com/Gentleman-Programming/gentle-ai), [usage](https://github.com/Gentleman-Programming/gentle-ai/blob/main/docs/usage.md), [agents](https://github.com/Gentleman-Programming/gentle-ai/blob/main/docs/agents.md).
 
-## Setup global (una vez)
-
-```powershell
-Set-Location "ruta\a\ingenia-hub-ia\scripts"
-.\Install-ConsultingCopilot.ps1 -StackProfile Full
-```
-
-## Crear un proyecto hijo
-
-### Opción A — Cursor (recomendado)
-
-Pedí en el chat: *"crear proyecto Full para IPLAN U01"* (o similar). La skill **`create-ingenia-project`** guía el flujo y ejecuta el script tras tu confirmación.
-
-### Opción B — PowerShell directo
+## Uso
 
 ```powershell
-Set-Location "ruta\a\ingenia-hub-ia\scripts"
+Set-Location "ruta\a\hub-projects-ia\scripts"
 
-# Consultoría
-.\New-HubProject.ps1 `
-  -StackProfile Consulting `
-  -ClientDisplayName "ACME" -ClientSlug "acme" `
-  -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+# Diagnóstico read-only
+.\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 
-# Full (CDD + entregables)
+# Default recomendado
 .\New-HubProject.ps1 `
-  -StackProfile Full `
+  -StackProfile ConsultingAI `
   -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
   -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
 
-# Solo desarrollo
+# Consultoría sin Gentle AI
 .\New-HubProject.ps1 `
-  -StackProfile GentleAi `
-  -ProjectName "mi-app"
+  -StackProfile Consulting `
+  -ClientDisplayName "ACME" -ClientSlug "acme" `
+  -InitiativeDisplayName "Assessment" -InitiativeId "A01"
+
+# Desarrollo
+.\New-HubProject.ps1 -StackProfile GentleAi -ProjectName "mi-app"
 ```
 
-Convención de carpeta: `projects/{client-slug}-{initiative-id}/` (Consulting/Full) o slug del nombre (GentleAi). Override: `-ProjectFolderName`.
+Para automatización puede fijarse `-GentleAiScope Auto|Global|Workspace|Existing`. `Workspace` falla si ya existe global.
 
-Retrocompat: `New-ConsultingCopilotProject.ps1` sigue disponible para rutas absolutas custom fuera del hub.
+## Proyecto generado
 
-## Después de generar
+- `PROJECT-CONTEXT.md`: entrada de contexto.
+- `.cursorignore`: excluye fuentes pesadas de indexado automático.
+- `context-budget.mdc` y `/start-task`: un objetivo/dominio y hasta dos archivos iniciales.
+- `.cursor/mcp.json`: sólo MCP del proyecto (Draw.io, Backlog, Archi); nunca Engram.
+- `.cdd/changes/`: artefactos CDD completos y versionables.
+- Engram: decisiones, hallazgos, estado, resúmenes y punteros.
 
-1. Abrí `projects/<nombre>/` como workspace raíz en Cursor.
-2. Revisá `.cursor/mcp.json` en el hijo.
-3. **Consulting/Full:** skill `bootstrap-consulting-engagement` para completar SPEC.
-4. **Full:** `/cdd-init` → `/cdd-new <entregable>`.
-5. **GentleAi:** `/sdd-init` → `/sdd-new <cambio>`.
-6. Copiá plantilla Word a `docs/templates/` (Consulting/Full).
+Sólo `consulting-copilot.mdc` y `context-budget.mdc` son always-on. Las reglas de transcripts, entregables, diagramas, onboarding y CDD se cargan por ámbito o demanda.
 
-## Catálogo de proyectos
+## Diagnóstico de proyectos existentes
 
-[`hub-registry.json`](hub-registry.json) registra localmente los hijos generados (ruta, perfil, fecha). No reemplaza el control de versiones de cada hijo.
-
-## Jerarquía `projects/` y gitignore
-
-Los hijos **no** se commitean en el repo padre:
-
-```gitignore
-projects/*
-!projects/.gitkeep
+```powershell
+.\Test-GentleAiProject.ps1 -TargetPath "D:\clientes\iplan"
 ```
 
-Cada hijo recibe `git init` automático (salvo `-SkipGitInit`). Si generás fuera de `projects/`, el gitignore del hub no aplica — usá la convención canónica.
+Es read-only. Informa duplicación global/workspace, MCP Engram local, skills que sombrean globales y reglas always-on excesivas. No migra automáticamente.
 
-## Mantenimiento del template
+Guía: [docs/MIGRATION-GENTLE-AI.md](docs/MIGRATION-GENTLE-AI.md). Resumen de esta actualización: [docs/CHANGES-2026-08-25.md](docs/CHANGES-2026-08-25.md).
 
-Propagá mejoras a:
+## Pruebas
 
-- `skeleton/` — base Consulting
-- `skeleton-minimal/` — base GentleAi
-- `overlays/consulting/` y `overlays/full/`
+```powershell
+.\tests\Run-Tests.ps1
+```
 
-Los hijos existentes **no** se actualizan solos; regenerá proyectos nuevos o portá cambios a mano.
+Requiere Pester. Cubre resolución de alcance, duplicados, perfiles, MCP local, always-on, skills y modelos.
 
-## Tokens y metadata
+## Hub y proyectos hijos
 
-- Placeholders: [SKELETON-PLACEHOLDERS.md](SKELETON-PLACEHOLDERS.md)
-- Metadata encargo (hijo): `.consulting-engagement.json`
-- Metadata dev (hijo): `.project-profile.json`
+El template vive en `skeleton/` y `overlays/`. Los proyectos viven en `projects/`, quedan ignorados por Git en el padre y reciben su propio `git init`. Para trabajar, abrir siempre el hijo como workspace raíz.
 
-## Relación con ingenia-template-ia
-
-`ingenia-hub-ia` evoluciona el contenido de `ingenia-template-ia` con la capa hub (`projects/`, `New-HubProject.ps1`, skill y reglas). Los scripts base (`New-ConsultingCopilotProject.ps1`, `ConsultingCopilot.psm1`) se mantienen compatibles.
+Flujo: [HUB-WORKFLOW.md](HUB-WORKFLOW.md). MCP opcionales: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md).
