@@ -1,0 +1,5 @@
+{
+  "stackProfile": "consulting-ai",
+  "persistence": "hybrid-repo-first",
+  "excludeSkills": ["go-testing", "branch-pr", "chained-pr", "work-unit-commits"]
+}

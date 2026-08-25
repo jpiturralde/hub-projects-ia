@@ -1,0 +1,19 @@
+# Fuentes pesadas: no indexar automáticamente. Se pueden abrir por ruta cuando sean necesarias.
+transcripts/**
+docs/client-documentation/**
+
+# Artefactos binarios y exports regenerables.
+docs/draft/**/*.docx
+docs/deliverables/**/*.docx
+docs/deliverables/**/*.pdf
+docs/diagrams/**/*.png
+docs/diagrams/**/*.svg
+**/*.zip
+**/*.7z
+**/*.rar
+
+# Metadatos y herramientas que no aportan contexto de negocio.
+.git/**
+.atl/cache/**
+node_modules/**
+

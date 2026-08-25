@@ -1,97 +1,56 @@
-# Perfiles de stack — Consulting Copilot
+# Perfiles y alcance Gentle AI
 
-Consulting Copilot soporta tres perfiles seleccionables al crear un proyecto.
+## Perfiles
 
-## Resumen
+| Perfil | Metadata | Workflow |
+|---|---|---|
+| `ConsultingAI` | `stackProfile: consulting-ai` | CDD para entregables; SDD sólo ante desarrollo explícito |
+| `Full` | Igual que ConsultingAI; registra el alias solicitado | Retrocompatibilidad |
+| `GentleAi` | `.project-profile.json` | Políticas y workflows Gentle AI de desarrollo |
+| `Consulting` | `stackProfile: consulting-only` | Skills/reglas de consultoría sin Gentle AI |
 
-| Perfil | Script | Metadata | Orquestación |
-|--------|--------|----------|--------------|
-| **GentleAi** | `-StackProfile GentleAi` | `.project-profile.json` | SDD vía `gentle-ai install --scope workspace` |
-| **Consulting** | `-StackProfile Consulting` | `.consulting-engagement.json` | Skills/reglas de dominio, sin CDD |
-| **Full** | `-StackProfile Full` | `.consulting-engagement.json` (`stackProfile: full`) | `gentle-ai install` (SDD + Engram) + overlay CDD |
+`New-IngeniaTemplateProject.ps1` ahora genera ConsultingAI.
 
-## Setup global (una vez)
+## Resolución de alcance
 
-```powershell
-cd ingenia-hub-ia\scripts
-.\Install-ConsultingCopilot.ps1 -StackProfile Full
-```
+| Estado detectado | Auto | Global | Workspace | Existing |
+|---|---|---|---|---|
+| Global existe | Reusar global | Reusar global | **Error** | Reusar global |
+| Sólo workspace existe | Reusar workspace | **Error** | Reusar workspace | Reusar workspace |
+| No existe configuración | Preguntar | Instalar global | Instalar workspace | **Error** |
+| Global + workspace | **Error y diagnóstico** | **Error** | **Error** | **Error** |
+| Más de un CLI | **Error y rutas** | **Error** | **Error** | **Error** |
 
-Valida: `gentle-ai`, `engram`, Node, Pandoc (opcional), Backlog.md (opcional).
+La opción local sólo aparece cuando no existe global.
 
-## Crear proyecto por cliente
+## CDD: Consulting-Driven Delivery
 
-Desde **ingenia-hub-ia**, el método canónico es `New-HubProject.ps1` (genera en `projects/` y registra en `hub-registry.json`):
+`explore → propose → spec + design → tasks → apply → verify → archive`
 
-```powershell
-# Solo consultoría
-.\New-HubProject.ps1 `
-  -StackProfile Consulting `
-  -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
-  -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+- Gentle AI conserva autoridad sobre orquestación, delegación y modelos.
+- Los agentes CDD usan `model: inherit`.
+- Artefactos completos: `.cdd/changes/{change}/`.
+- Engram: resumen ≤250 palabras, decisiones/hallazgos, estado, riesgos y puntero.
+- Explore: un dominio, índice + hasta dos archivos; justificar expansión.
+- Verify usa contexto fresco y no modifica borradores.
+- Archive sincroniza fuentes canónicas.
 
-# Full (CDD + consultoría)
-.\New-HubProject.ps1 `
-  -StackProfile Full `
-  -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
-  -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+## Skills locales
 
-# Solo desarrollo
-.\New-HubProject.ps1 `
-  -StackProfile GentleAi `
-  -ProjectName "mi-app"
-```
+Las especializaciones del template usan nombres propios para no sombrear skills globales:
 
-Retrocompat: `New-ConsultingCopilotProject.ps1` acepta `-TargetPath` absoluto custom; `New-IngeniaTemplateProject.ps1` equivale a `-StackProfile Consulting`.
+- `consulting-draft-client-deliverable`
+- `consulting-code-technical-analysis`
 
-## Después de crear
+No se incluye `judgment-day` local; ConsultingAI reutiliza la versión instalada por Gentle AI.
 
-1. Abrí la carpeta destino como **workspace raíz** en Cursor.
-2. Revisá `.cursor/mcp.json`.
-3. Perfil **Consulting/Full**: usá skill `bootstrap-consulting-engagement` para completar SPEC.
-4. Perfil **Full**: ejecutá `/cdd-init`, luego `/cdd-new <entregable>`.
-5. Perfil **GentleAi**: ejecutá `/sdd-init`, luego `/sdd-new <cambio>`.
+## Capa Claude/Cowork
 
-## Reglas activas por perfil
+Es opcional y default `false`. Si se incluye, `CLAUDE.md` importa sólo `PROJECT-CONTEXT.md`; no precarga README, SPEC y ARCHITECTURE.
 
-```
-Consulting:
-  consulting-copilot.mdc
-  + reglas skeleton (deliverables, ArchiMate, transcripts)
+## Engram y MCP
 
-Full:
-  gentle-ai.mdc (instalado por gentle-ai install)
-  + consulting-copilot.mdc
-  + gentle-ai-consulting.mdc (orquestador CDD)
-  + skills/agents cdd-* (overlay) y sdd-* (gentle-ai install)
+El generador nunca escribe Engram en `.cursor/mcp.json`. Gentle AI administra Engram en el alcance que corresponda; el MCP local contiene sólo Draw.io, Backlog o Archi.
 
-GentleAi:
-  gentle-ai.mdc (instalado por gentle-ai install --scope workspace)
-```
+Después de actualizar el binario, usar `gentle-ai sync`. Para diagnóstico, `gentle-ai doctor` y `scripts/Test-GentleAiProject.ps1`.
 
-## Metadata
-
-- **`.consulting-engagement.json`** — cliente, iniciativa, MCP toggles, `stackProfile`
-- **`.project-profile.json`** — solo perfil GentleAi
-- **`.workbench-metadata.json`** — retrocompat (bootstrap skill lo lee como fallback)
-
-## Troubleshooting
-
-| Problema | Solución |
-|----------|----------|
-| Engram no conecta | Verificar `engram` en PATH y servicio activo (`gentle-ai doctor`) |
-| MCP drawio falla | Node LTS + `npx @drawio/mcp` |
-| CDD no aparece | Confirmar `stackProfile: full` en metadata y presencia de `overlays/full/` |
-| Skill registry vacío | `gentle-ai skill-registry refresh --force` en el repo del proyecto |
-| Placeholders `{{` sin reemplazar | Re-ejecutar script con todos los parámetros de cliente |
-
-## Diagrama de decisión
-
-```mermaid
-flowchart TD
-  start[Nuevo proyecto] --> q1{¿Entregables al cliente?}
-  q1 -->|No| gentleAi[GentleAi]
-  q1 -->|Sí| q2{¿Orquestación CDD + Engram?}
-  q2 -->|No| consulting[Consulting]
-  q2 -->|Sí| full[Full]
-```

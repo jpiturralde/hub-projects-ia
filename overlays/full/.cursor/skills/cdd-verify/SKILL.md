@@ -1,6 +1,6 @@
 ﻿---
 name: cdd-verify
-description: "Trigger: CDD verification phase, verify deliverable before Pandoc. QA pre-cliente â€” grep, revisores, no tests."
+description: "Trigger: CDD verification phase, verify deliverable before Pandoc. QA pre-cliente — grep, revisores, no tests."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
@@ -11,33 +11,37 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR â€” STOP. Do NOT execute these instructions inline. Delegate to
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
 > the dedicated `cdd-verify` sub-agent using your platform's delegation primitive
 > (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
 > only.
 
 ## Executor Override
 
-If you ARE the `cdd-verify` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor â€” execute.
+If you ARE the `cdd-verify` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Language Domain Contract
 
 - **Verify report:** neutral professional Spanish unless the user requests otherwise.
-- **Client deliverables under review:** formal Spanish per `draft-client-deliverable`.
+- **Client deliverables under review:** formal Spanish per `consulting-draft-client-deliverable`.
 - **Chat with user:** match user language.
+
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
 
 ## Purpose
 
-You are a sub-agent responsible for **QA PRE-CLIENTE**. You prove the deliverable draft meets spec acceptance criteria, passes the internal-reference linter, and is ready for Pandoc â€” without running dev tests or builds.
+You are a sub-agent responsible for **QA PRE-CLIENTE**. You prove the deliverable draft meets spec acceptance criteria, passes the internal-reference linter, and is ready for Pandoc — without running dev tests or builds.
 
 ## Consulting Hard Rules
 
-- **NO `go test`, NO unit tests, NO builds, NO coverage** â€” verification is document QA only.
-- **Mandatory:** run internal-reference grep from `deliverable-draft-workflow.mdc` on all `draft/*.md` â€” output MUST be empty to PASS.
+- **NO `go test`, NO unit tests, NO builds, NO coverage** — verification is document QA only.
+- **Mandatory:** run internal-reference grep from `deliverable-draft-workflow.mdc` on all `draft/*.md` — output MUST be empty to PASS.
 - **Recommend delegation** (orchestrator executes): `review-client-facing` + `review-canonical-alignment` in parallel when available.
 - **Recommend `judgment-day`** on draft files after apply or when issues are subtle.
-- Do NOT fix issues â€” report for orchestrator/user or return to `cdd-apply`.
-- Do NOT regenerate `.docx` â€” verify source `.md` only.
+- Do NOT fix issues — report for orchestrator/user or return to `cdd-apply`.
+- Do NOT regenerate `.docx` — verify source `.md` only.
 
 ## Shared Contract
 
@@ -48,15 +52,15 @@ You are a sub-agent responsible for **QA PRE-CLIENTE**. You prove the deliverabl
 
 From the orchestrator:
 - Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Persistence mode (`hybrid-repo-first`)
 - Optional: results from delegated `review-client-facing` and `review-canonical-alignment`
 
-## Engram Retrieval
+## Repository retrieval
 
 Required:
-- `cdd/{change-name}/spec`
-- `cdd/{change-name}/tasks`
-- `cdd/{change-name}/apply-progress`
+- `.cdd/changes/{change-name}/spec.md`
+- `.cdd/changes/{change-name}/tasks.md`
+- `.cdd/changes/{change-name}/apply-progress.md`
 
 ## Execution Steps
 
@@ -66,9 +70,9 @@ Follow **Section A** from `../_shared/cdd-phase-common.md`.
 
 ### Step 2: Read Artifacts and Draft Files
 
-1. Read spec â€” acceptance requirements and scenarios
-2. Read tasks â€” confirm all writing tasks marked `[x]` (unchecked = CRITICAL)
-3. Read apply-progress â€” files changed, known deviations
+1. Read spec — acceptance requirements and scenarios
+2. Read tasks — confirm all writing tasks marked `[x]` (unchecked = CRITICAL)
+3. Read apply-progress — files changed, known deviations
 4. Read all `docs/draft/*.md` implicated by design/tasks
 
 ### Step 3: Mandatory Internal-Reference Grep
@@ -83,12 +87,12 @@ cd "docs/draft" && grep -niE \
 
 On Windows/PowerShell, use equivalent search (e.g., `Select-String` with same pattern) if `grep` unavailable.
 
-**Any hit = CRITICAL** â€” blocks PASS until fixed in `cdd-apply`.
+**Any hit = CRITICAL** — blocks PASS until fixed in `cdd-apply`.
 
 Also perform **semantic review** (not grep-able) per workflow rule:
-- Internal-only meetings without client cited? â†’ CRITICAL/WARNING
-- "Official list" without **client-provided** context? â†’ WARNING
-- Meeting dates without clear **with the client** context? â†’ WARNING
+- Internal-only meetings without client cited? → CRITICAL/WARNING
+- "Official list" without **client-provided** context? → WARNING
+- Meeting dates without clear **with the client** context? → WARNING
 
 ### Step 4: Spec Compliance Matrix
 
@@ -96,15 +100,15 @@ Map each acceptance requirement/scenario to draft evidence:
 
 | Requisito | Escenario | Evidencia en draft | Estado |
 |-----------|-----------|-------------------|--------|
-| {ID} | {name} | {Â§ / file} | PASS / FAIL / MISSING |
+| {ID} | {name} | {§ / file} | PASS / FAIL / MISSING |
 
-Static reading of draft text is sufficient â€” no runtime tests.
+Static reading of draft text is sufficient — no runtime tests.
 
 ### Step 5: Delegated Reviews (Recommend to Orchestrator)
 
 If not already run, **recommend** orchestrator delegate in parallel:
-- `review-client-facing` â€” tone, client-safe wording, no leakage
-- `review-canonical-alignment` â€” deliverable reflects canonical sources
+- `review-client-facing` — tone, client-safe wording, no leakage
+- `review-canonical-alignment` — deliverable reflects canonical sources
 
 Incorporate delegated results into verify report when provided.
 
@@ -115,14 +119,14 @@ When draft is substantial or prior reviews found WARNINGs, recommend `judgment-d
 ### Step 7: Numbering and Composition Check
 
 Verify per `deliverable-draft-workflow.mdc`:
-- Main file sections 1â€“4
+- Main file sections 1–4
 - Annexes continuous from 5+
-- Cross-references in Â§4 match annex files
-- Pandoc file list matches design (informational â€” do not run Pandoc in verify)
+- Cross-references in §4 match annex files
+- Pandoc file list matches design (informational — do not run Pandoc in verify)
 
 ### Step 8: Persist Verify Report
 
-**Mandatory â€” do NOT skip.**
+**Mandatory — do NOT skip.**
 
 Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - artifact: `verify-report`
@@ -139,7 +143,7 @@ Follow **Section C** from `../_shared/cdd-phase-common.md`:
 **Mode**: CDD document QA (no dev tests)
 
 ### Completeness
-| DimensiÃ³n | Estado |
+| Dimensión | Estado |
 |-----------|--------|
 | Tasks completadas | {N}/{total} |
 | Archivos draft | {list} |
@@ -169,13 +173,13 @@ Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - {issue}
 
 ### Judgment Day
-Recommended: {Yes/No} â€” {reason}
+Recommended: {Yes/No} — {reason}
 
 ### Verdict
 {PASS | PASS WITH WARNINGS | FAIL}
 
 ### Next Step
-{PASS â†’ cdd-archive or Pandoc (user) | FAIL â†’ cdd-apply}
+{PASS → cdd-archive or Pandoc (user) | FAIL → cdd-apply}
 ```
 
 ## Result Contract Fields
@@ -201,17 +205,17 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 
 | Condition | Action |
 |-----------|--------|
-| Grep hits > 0 | FAIL â€” return to cdd-apply |
-| Unchecked writing task | CRITICAL â€” FAIL or PASS WITH WARNINGS if explicitly waived |
+| Grep hits > 0 | FAIL — return to cdd-apply |
+| Unchecked writing task | CRITICAL — FAIL or PASS WITH WARNINGS if explicitly waived |
 | Spec scenario MISSING | CRITICAL |
-| CRITICAL issues | Verdict FAIL â€” blocks archive |
+| CRITICAL issues | Verdict FAIL — blocks archive |
 | WARNING only | PASS WITH WARNINGS |
 | All checks pass | PASS |
 
 ## Rules
 
 - NEVER use `go test`, builds, or coverage as verification evidence
-- ALWAYS run internal-reference grep â€” skipping is FAIL
-- Do NOT fix draft content â€” report only
+- ALWAYS run internal-reference grep — skipping is FAIL
+- Do NOT fix draft content — report only
 - CRITICAL issues in verify report block `cdd-archive`
 - Return envelope per **Section D** from `../_shared/cdd-phase-common.md`

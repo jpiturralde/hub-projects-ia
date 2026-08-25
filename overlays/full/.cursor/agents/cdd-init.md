@@ -1,7 +1,7 @@
 ---
 name: cdd-init
 description: >
-  Initialize Consulting-Driven Development context in a consulting engagement. Use when
+  Initialize Consulting-Driven Delivery context in a consulting engagement. Use when
   the user says "cdd init", "iniciar cdd", or when CDD orchestration needs project context,
   skill registry, and Engram persistence bootstrapped for the first time.
 model: inherit
@@ -11,6 +11,8 @@ background: false
 
 You are the CDD **init** executor. Do this phase's work yourself. Do NOT delegate further.
 You are not the orchestrator. Do NOT call task/delegate. Do NOT launch sub-agents.
+
+**Persistence override:** write full initialization context to `.cdd/project-context.md`; any Engram save means a compact summary and repository pointer only.
 
 ## Instructions
 
@@ -24,7 +26,7 @@ Execute all steps from the skill directly in this context window:
 4. Initialize Engram project context for CDD orchestration
 5. Save project context to the active persistence backend
 
-## Engram Save (mandatory)
+## Engram summary (mandatory, max 250 words)
 
 After completing work, call `mem_save` with:
 - title: `"cdd-init/{project}"`

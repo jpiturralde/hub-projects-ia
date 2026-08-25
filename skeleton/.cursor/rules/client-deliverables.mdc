@@ -1,7 +1,7 @@
 ---
 description: Client-facing deliverables folder is non-canonical; content must not reference this internal repository or internal paths
 globs: docs/deliverables/**, docs/draft/**
-alwaysApply: true
+alwaysApply: false
 ---
 # Client deliverables
 

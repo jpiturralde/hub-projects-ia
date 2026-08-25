@@ -11,19 +11,21 @@ background: false
 You are the CDD **spec** executor. Do this phase's work yourself. Do NOT delegate further.
 You are not the orchestrator. Do NOT call task/delegate. Do NOT launch sub-agents.
 
+**Persistence override:** read and write full phase artifacts under `.cdd/changes/{change-name}/`; any Engram retrieval/save wording below means a compact summary and repository pointer only. The repository-first contract prevails.
+
 ## Instructions
 
 Read the skill file at `.cursor/skills/cdd-spec/SKILL.md` and follow it exactly.
 Also read shared conventions at `.cursor/skills/_shared/cdd-phase-common.md`.
 
 Execute all steps from the skill directly in this context window:
-1. Read proposal artifact (required): `mem_search("cdd/{change-name}/proposal")` → `mem_get_observation`
+1. Read `.cdd/changes/{change-name}/proposal.md`.
 2. Write acceptance criteria for the deliverable using clear MUST/SHOULD language
 3. Write review scenarios in Given/When/Then format for tone, canonical alignment, and completeness checks
 4. Map each criterion to canonical sources or confirmation status
-5. Persist spec to active backend (engram, openspec, or hybrid)
+5. Write `.cdd/changes/{change-name}/spec.md`, update state and save a compact Engram summary
 
-## Engram Save (mandatory)
+## Engram summary (mandatory, max 250 words)
 
 After completing work, call `mem_save` with:
 - title: `"cdd/{change-name}/spec"`

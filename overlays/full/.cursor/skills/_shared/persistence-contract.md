@@ -1,21 +1,18 @@
-﻿# Persistence Contract â€” CDD
+# Contrato de persistencia CDD
 
-## Canonical sources (git)
+## Repositorio
 
-| Information | Canonical file |
-|-------------|----------------|
-| Scope | `SPEC.md` |
-| Architecture narrative | `ARCHITECTURE.md` |
-| Gaps / questions | `docs/architecture-gaps-and-questions.md` |
-| ArchiMate model | Archi + export XML in `docs/diagrams/` |
-| Client deliverable drafts | `docs/draft/*.md` |
+- Alcance: `SPEC.md`
+- Arquitectura: `ARCHITECTURE.md`
+- Brechas: `docs/architecture-gaps-and-questions.md`
+- Borradores: `docs/draft/`
+- Artefactos CDD completos: `.cdd/changes/{change}/`
 
-## Engram (progress)
+## Engram
 
-CDD artifacts in Engram track **change progress** for a deliverable. They do NOT replace canonical git files.
+Sólo decisiones, hallazgos, estado, resúmenes ejecutivos y punteros. Nunca reemplaza archivos versionados.
 
-After `cdd-archive`, ensure canonical files are updated and deliverable drafts reflect backed-up content.
+## Cierre
 
-## Engagement metadata
+Archive verifica que las fuentes canónicas reflejen los hechos confirmados, actualiza `state.json` y guarda un resumen de cierre en Engram.
 
-Read `.consulting-engagement.json` (fallback `.workbench-metadata.json`) for client/initiative context.

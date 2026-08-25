@@ -1,7 +1,7 @@
 ---
 description: Protect transcripts folder as immutable meeting-record source (by default)
 globs: "**/transcripts/**"
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Transcripts (read-only by default)

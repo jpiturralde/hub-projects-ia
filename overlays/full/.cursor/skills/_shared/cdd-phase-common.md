@@ -1,57 +1,38 @@
-﻿# CDD Phase Common â€” Shared Contract
+# Contrato común de fases CDD
 
-## Section A: Load Skills
+## Carga mínima
 
-Read skill paths injected by the orchestrator before work. Also load:
-- `draft-client-deliverable` when writing client-facing content
-- `client-deliverables.mdc` rules when touching `docs/deliverables/`
+1. Leer `PROJECT-CONTEXT.md`.
+2. Leer `.cdd/changes/{change}/state.json`.
+3. Leer sólo las dependencias directas:
 
-Filter registry using `.atl/stack-profile.json` when present â€” exclude dev-only skills listed in `excludeSkills`.
+| Fase | Dependencias |
+|---|---|
+| propose | explore, si existe |
+| spec | proposal |
+| design | proposal |
+| tasks | spec + design |
+| apply | tasks + spec + design + apply-progress, si existe |
+| verify | spec + tasks + apply-progress |
+| archive | state + verify-report; abrir otros artefactos sólo para resolver una inconsistencia |
 
-## Section B: Retrieval (Engram)
+`SPEC.md` es la referencia canónica de alcance.
 
-1. `mem_search(query: "{topic_key}", project: "{project}")` â†’ observation ID
-2. `mem_get_observation(id: {id})` â†’ full content (mandatory)
+## Escritura
 
-Required reads by phase:
+Guardar el artefacto completo en `.cdd/changes/{change}/{artifact}.md` y actualizar `state.json`.
 
-| Phase | Required topic keys |
-|-------|---------------------|
-| cdd-propose | `cdd/{change}/explore` (optional) |
-| cdd-spec | `cdd/{change}/proposal` |
-| cdd-design | `cdd/{change}/proposal` |
-| cdd-tasks | `cdd/{change}/spec`, `cdd/{change}/design` |
-| cdd-apply | `cdd/{change}/tasks`, spec, design, apply-progress (if exists) |
-| cdd-verify | spec, tasks, apply-progress |
-| cdd-archive | all artifacts for change |
+Después, guardar en Engram una observación breve con:
 
-Also read **SPEC.md** as canonical scope reference for consulting projects.
+- estado y resumen ejecutivo;
+- decisiones o hallazgos reutilizables;
+- riesgos/bloqueos;
+- puntero al archivo del repositorio;
+- siguiente fase.
 
-## Section C: Persistence (Engram)
+No copiar el artefacto completo. Máximo recomendado: 250 palabras.
 
-```
-mem_save(
-  title: "cdd/{change-name}/{artifact-type}",
-  topic_key: "cdd/{change-name}/{artifact-type}",
-  type: "architecture",
-  project: "{project}",
-  capture_prompt: false,
-  content: "{artifact markdown}"
-)
-```
+## Resultado
 
-## Section D: Result Contract
+Devolver: `status`, `executive_summary`, `artifacts`, `next_recommended`, `risks` y `skill_resolution`.
 
-Every phase returns:
-- `status`: done | blocked | partial
-- `executive_summary`
-- `artifacts`
-- `next_recommended`
-- `risks`
-- `skill_resolution`
-
-## Prohibited in CDD
-
-- Running unit tests, builds, or coverage as verification
-- Creating PRs unless user explicitly requests git workflow
-- Writing internal repo paths in client deliverables

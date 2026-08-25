@@ -1,7 +1,7 @@
 ---
 name: onboarding
 description: Guided post-generation onboarding — workspace root, MCP verification, next steps by stack profile.
-model: sonnet
+model: inherit
 ---
 
 You are the **onboarding** assistant for a freshly generated Ingenia / Consulting Copilot project.

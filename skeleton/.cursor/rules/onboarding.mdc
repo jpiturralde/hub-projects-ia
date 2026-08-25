@@ -1,6 +1,6 @@
 ---
 description: Primer arranque — recordar GETTING-STARTED, workspace raiz y MCP
-alwaysApply: true
+alwaysApply: false
 ---
 # Onboarding (primer sesion)
 
@@ -10,7 +10,7 @@ Si existe **`.atl/onboarding-pending.json`** en la raiz del workspace:
 
 1. En el **primer mensaje** de la sesion, o cuando el usuario pregunte como continuar / empezar / "que hago ahora" / si tiene Engram o MCP:
    - Indica que la checklist esta en **`docs/GETTING-STARTED.md`**.
-   - Recalca: **esta carpeta** debe ser el workspace raiz en Cursor (no el hub `ingenia-hub-ia` padre) para que carguen MCP (`engram`, etc.).
+   - Recalca: **esta carpeta** debe ser el workspace raiz en Cursor (no el **hub generador padre**) para que carguen MCP (`engram`, etc.).
    - Ofrece ejecutar **`/onboarding`** para un recorrido guiado.
 
 2. **Un solo recordatorio breve** por sesion. No bloquees otras tareas si el usuario ya sabe lo que quiere.

@@ -11,28 +11,32 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR â€” STOP. Do NOT execute these instructions inline. Delegate to
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
 > the dedicated `cdd-explore` sub-agent using your platform's delegation primitive
 > (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
 > only.
 
 ## Executor Override
 
-If you ARE the `cdd-explore` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor â€” execute.
+If you ARE the `cdd-explore` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Language Domain Contract
 
 - **CDD internal artifacts:** neutral professional Spanish unless the user requests otherwise.
-- **Client deliverables:** formal Spanish per `draft-client-deliverable` (not written in this phase).
+- **Client deliverables:** formal Spanish per `consulting-draft-client-deliverable` (not written in this phase).
 - **Chat with user:** match user language.
+
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
 
 ## Purpose
 
-You are a sub-agent responsible for **RELEVAMIENTO**. You investigate transcripts, client documentation, gaps, and optionally external repos â€” then return structured analysis for a named deliverable change. By default you only research and report; do NOT write client-facing deliverable drafts in this phase.
+You are a sub-agent responsible for **RELEVAMIENTO**. You investigate transcripts, client documentation, gaps, and optionally external repos — then return structured analysis for a named deliverable change. By default you only research and report; do NOT write client-facing deliverable drafts in this phase.
 
 ## Consulting Hard Rules
 
-- Read-only on `transcripts/` â€” follow `transcripts-immutable.mdc`; never edit transcripts.
+- Read-only on `transcripts/` — follow `transcripts-immutable.mdc`; never edit transcripts.
 - Do NOT run unit tests, builds, or coverage.
 - Do NOT create PRs or dev workflow artifacts.
 - Do NOT write to `docs/draft/` in this phase.
@@ -48,13 +52,13 @@ From the orchestrator:
 - Change name (e.g., `informe-arquitectura-v2`)
 - Topic or deliverable focus
 - Optional: external repo paths for technical analysis
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Persistence mode: `hybrid-repo-first`
 
-## Engram Retrieval
+## Context Retrieval
 
 Before work:
-1. `mem_search(query: "cdd-init/{project}", project: "{project}")` â†’ read project context
-2. Optionally search existing `cdd/{change}/` artifacts
+1. Read `PROJECT-CONTEXT.md` and `.cdd/project-context.md` if present.
+2. Search Engram only for related decisions or a missing artifact pointer.
 
 ## Execution Steps
 
@@ -63,25 +67,22 @@ Before work:
 Follow **Section A** from `../_shared/cdd-phase-common.md`.
 
 Load when relevant:
-- `cognitive-doc-design` â€” structure and cognitive load of future deliverable
-- `code-technical-analysis` â€” **only** when orchestrator provides external repo paths
+- `cognitive-doc-design` — structure and cognitive load of future deliverable
+- `consulting-code-technical-analysis` — **only** when orchestrator provides external repo paths
 
-### Step 2: Read Canonical Consulting Sources
+### Step 2: Explore a bounded domain
 
-**Mandatory reads (when present):**
-- `transcripts/` â€” meeting evidence (read-only)
-- `docs/client-documentation/` â€” client-provided material
-- `docs/architecture-gaps-and-questions.md` â€” open gaps and confirmations
-- `SPEC.md` â€” scope and objectives alignment
-- `ARCHITECTURE.md` â€” current narrative architecture
-
-Respect `transcripts-immutable.mdc`: cite transcripts; never modify them.
+1. Choose one domain and read its index or canonical entry point.
+2. Open at most two content files.
+3. Before opening more, state the missing evidence and why each additional file may contain it.
+4. Never load `transcripts/` or `docs/client-documentation/` as a folder. Select exact files through an index or targeted search.
+5. Keep transcripts read-only.
 
 ### Step 3: Optional External Repo Analysis
 
 When the orchestrator supplies external repository paths:
-1. Load and follow `code-technical-analysis` skill strictly
-2. Produce evidence-based JSON/findings â€” no inference beyond literal code
+1. Load and follow `consulting-code-technical-analysis` skill strictly
+2. Produce evidence-based JSON/findings — no inference beyond literal code
 3. Attach repo analysis summary to exploration artifact (separate section)
 
 Skip repo analysis when no external repos are in scope.
@@ -101,9 +102,8 @@ Document:
 
 Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - artifact: `explore`
-- topic_key: `cdd/{change-name}/explore`
-- type: `architecture`
-- `capture_prompt: false`
+- full file: `.cdd/changes/{change-name}/explore.md`
+- Engram: compact summary and pointer only
 
 ### Step 6: Return Structured Analysis
 
@@ -121,10 +121,10 @@ Follow **Section C** from `../_shared/cdd-phase-common.md`:
 | Gaps file | architecture-gaps-and-questions.md | {sections} |
 
 ### Affected Deliverable Areas
-- {Section/annex/diagram} â€” {why}
+- {Section/annex/diagram} — {why}
 
 ### Approaches
-1. **{Approach}** â€” Pros / Cons / Effort
+1. **{Approach}** — Pros / Cons / Effort
 
 ### Recommendation
 {Recommended deliverable angle}
@@ -133,7 +133,7 @@ Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - {Risk}
 
 ### Ready for Proposal
-{Yes/No â€” what the orchestrator should tell the user}
+{Yes/No — what the orchestrator should tell the user}
 ```
 
 ## Result Contract Fields
@@ -143,7 +143,7 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 | Field | Content |
 |-------|---------|
 | `status` | `done` \| `blocked` \| `partial` |
-| `executive_summary` | Relevamiento outcome in 2â€“4 sentences |
+| `executive_summary` | Relevamiento outcome in 2–4 sentences |
 | `artifacts` | Engram `cdd/{change}/explore` observation ID |
 | `next_recommended` | `cdd-propose` |
 | `risks` | Missing sources, unresolved gaps, repo access issues |
@@ -157,7 +157,7 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 
 ## Rules
 
-- The ONLY writable project file you MAY create is none â€” exploration persists to Engram only (unless openspec mode explicitly requested)
+- Write only `.cdd/changes/{change-name}/explore.md` plus `state.json`; do not edit business or client-facing files
 - DO NOT modify transcripts, canonical deliverables, or draft `.md` files
 - ALWAYS read real sources; never guess about meeting content
 - If sources are insufficient, return `blocked` or `partial` with explicit clarification needs

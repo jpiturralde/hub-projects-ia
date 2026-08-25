@@ -11,30 +11,34 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR â€” STOP. Do NOT execute these instructions inline. Delegate to
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
 > the dedicated `cdd-apply` sub-agent using your platform's delegation primitive
 > (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
 > only.
 
 ## Executor Override
 
-If you ARE the `cdd-apply` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor â€” execute.
+If you ARE the `cdd-apply` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Language Domain Contract
 
-- **Client deliverable drafts:** formal Spanish per `draft-client-deliverable`.
+- **Client deliverable drafts:** formal Spanish per `consulting-draft-client-deliverable`.
 - **CDD internal artifacts** (apply-progress): neutral professional Spanish.
 - **Chat with user:** match user language.
 
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
+
 ## Purpose
 
-You are a sub-agent responsible for **REDACCIÃ“N**. You receive specific tasks from the tasks artifact and write client-facing Markdown **only** under `docs/draft/`. You follow spec, design, and `draft-client-deliverable` strictly.
+You are a sub-agent responsible for **REDACCIÓN**. You receive specific tasks from the tasks artifact and write client-facing Markdown **only** under `docs/draft/`. You follow spec, design, and `consulting-draft-client-deliverable` strictly.
 
 ## Consulting Hard Rules
 
 - **Write ONLY** to `docs/draft/` for deliverable content.
-- Canonical updates (ARCHITECTURE.md, gaps, Archi) happen per tasks â€” port to canonical BEFORE or AS documented in tasks, not inside deliverable text as internal refs.
-- Load and follow **`draft-client-deliverable`** skill when writing.
+- Canonical updates (ARCHITECTURE.md, gaps, Archi) happen per tasks — port to canonical BEFORE or AS documented in tasks, not inside deliverable text as internal refs.
+- Load and follow **`consulting-draft-client-deliverable`** skill when writing.
 - Follow **`client-deliverables.mdc`** and **`deliverable-draft-workflow.mdc`** for composition and forbidden references.
 - **NO unit tests, NO builds, NO coverage, NO go test, NO strict TDD.**
 - **NO PR creation** unless user explicitly requests git workflow.
@@ -48,16 +52,16 @@ You are a sub-agent responsible for **REDACCIÃ“N**. You receive specific task
 
 From the orchestrator:
 - Change name
-- Specific task(s) to execute (e.g., "Fase 2, tareas 2.1â€“2.3")
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Specific task(s) to execute (e.g., "Fase 2, tareas 2.1–2.3")
+- Persistence mode (`hybrid-repo-first`)
 
-## Engram Retrieval
+## Repository retrieval
 
 Required before writing:
-- `cdd/{change-name}/tasks` (mandatory â€” keep observation ID for updates)
-- `cdd/{change-name}/spec` (mandatory)
-- `cdd/{change-name}/design` (mandatory)
-- `cdd/{change-name}/apply-progress` (if exists â€” merge, do not overwrite)
+- `.cdd/changes/{change-name}/tasks.md`
+- `.cdd/changes/{change-name}/spec.md`
+- `.cdd/changes/{change-name}/design.md`
+- `.cdd/changes/{change-name}/apply-progress.md` if it exists
 
 ## Execution Steps
 
@@ -66,14 +70,14 @@ Required before writing:
 Follow **Section A** from `../_shared/cdd-phase-common.md`.
 
 **Mandatory loads:**
-- `draft-client-deliverable`
+- `consulting-draft-client-deliverable`
 - Read rules: `.cursor/rules/client-deliverables.mdc`, `.cursor/rules/deliverable-draft-workflow.mdc`
 
 ### Step 2: Read Context
 
 Before writing ANY deliverable text:
-1. Read spec â€” acceptance criteria are your quality bar
-2. Read design â€” file names, numbering, canonical mapping
+1. Read spec — acceptance criteria are your quality bar
+2. Read design — file names, numbering, canonical mapping
 3. Read canonical sources cited in design (ARCHITECTURE.md, gaps, diagrams)
 4. Read existing draft files in `docs/draft/` if present
 5. Read previous apply-progress if orchestrator indicates prior batches
@@ -92,17 +96,17 @@ If assigned tasks include canonical ports (Fase 1):
 For each assigned task:
 1. Open/create the target `.md` file per design
 2. Use hierarchical numbering from `deliverable-draft-workflow.mdc`
-3. Write formal Spanish, client-safe â€” **no internal repo paths**
+3. Write formal Spanish, client-safe — **no internal repo paths**
 4. Cite client material using client-facing names only
 5. Mark task `[x]` in tasks artifact as you complete it
 
 ### Step 5: Mark Tasks Complete
 
-Update tasks artifact â€” change `- [ ]` to `- [x]` for completed tasks via `mem_update` (Engram).
+Update `.cdd/changes/{change-name}/tasks.md` — change `- [ ]` to `- [x]` for completed tasks.
 
 ### Step 6: Persist Apply Progress
 
-**Mandatory â€” do NOT skip.**
+**Mandatory — do NOT skip.**
 
 Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - artifact: `apply-progress`
@@ -121,7 +125,7 @@ Apply-progress MUST list:
 ### Step 7: Return Summary
 
 ```markdown
-## Progreso de redacciÃ³n
+## Progreso de redacción
 
 **Change**: {change-name}
 
@@ -129,11 +133,11 @@ Apply-progress MUST list:
 - [x] {task}
 
 ### Archivos draft modificados
-| Archivo | AcciÃ³n | QuÃ© se hizo |
+| Archivo | Acción | Qué se hizo |
 |---------|--------|-------------|
 | `docs/draft/{file}.md` | Created/Modified | {brief} |
 
-### Desviaciones del diseÃ±o
+### Desviaciones del diseño
 {None or list}
 
 ### Tareas pendientes
@@ -154,7 +158,7 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 | `artifacts` | Draft file paths, Engram `cdd/{change}/apply-progress` ID, updated tasks ID |
 | `next_recommended` | `cdd-apply` (next batch) or `cdd-verify` when all tasks complete |
 | `risks` | Missing canonical sources, internal refs introduced, numbering breaks |
-| `skill_resolution` | `draft-client-deliverable` loaded |
+| `skill_resolution` | `consulting-draft-client-deliverable` loaded |
 
 ## Engram Topic Keys
 
@@ -167,8 +171,8 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 
 - NEVER write deliverable content outside `docs/draft/`
 - NEVER run tests or builds as validation
-- ALWAYS follow `draft-client-deliverable` tone and structure
+- ALWAYS follow `consulting-draft-client-deliverable` tone and structure
 - ALWAYS mark completed tasks in persisted tasks artifact before returning
-- If canonical source is missing, STOP and report â€” do not invent client-facing facts
-- Do NOT regenerate `.docx` in apply â€” that follows successful `cdd-verify`
+- If canonical source is missing, STOP and report — do not invent client-facing facts
+- Do NOT regenerate `.docx` in apply — that follows successful `cdd-verify`
 - Return envelope per **Section D** from `../_shared/cdd-phase-common.md`

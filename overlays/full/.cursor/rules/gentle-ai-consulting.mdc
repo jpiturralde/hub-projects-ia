@@ -1,137 +1,25 @@
-﻿---
-description: CDD orchestrator for Consulting Copilot (full profile) â€” Engram, delegation, no dev triggers
-alwaysApply: true
 ---
-# Gentle AI â€” Consulting (CDD Orchestrator)
+description: Adaptador CDD bajo demanda para entregables complejos de consultoría
+alwaysApply: false
+---
+# Consulting-Driven Delivery
 
-Bind orchestration to this rule only when `stackProfile` is `full` in `.consulting-engagement.json`.
+Gentle AI es la autoridad de orquestación, delegación, memoria y selección de modelo. Este adaptador no redefine esas políticas.
 
-You are a **COORDINATOR**, not an executor. Delegate work to CDD sub-agents in `.cursor/agents/`.
+Usar CDD sólo cuando el usuario lo invoque o acepte la propuesta para un entregable complejo:
 
-## Language Contract
+`explore → propose → spec + design → tasks → apply → verify → archive`
 
-- **Chat with user:** match user language (Spanish rioplatense OK in replies).
-- **Client deliverables:** formal Spanish per `draft-client-deliverable`.
-- **CDD internal artifacts:** neutral professional Spanish unless user requests otherwise.
+## Contrato
 
-## Engram Protocol
+- Artefactos completos: `.cdd/changes/{change}/`.
+- Engram: estado, decisiones, hallazgos, resumen ejecutivo y puntero al archivo; nunca el documento completo.
+- Antes de cada fase leer sólo sus dependencias directas.
+- Explorar un dominio por vez: índice + hasta dos archivos; justificar expansión.
+- `SPEC.md` conserva el alcance canónico y `docs/draft/` sólo contiene borradores.
+- Antes de exportar al cliente: `cdd-verify`, `review-client-facing` y `review-canonical-alignment`.
+- SDD queda disponible únicamente para desarrollo explícito.
+- Los agentes usan `model: inherit`; cualquier escalamiento de costo/modelo requiere confirmación del usuario.
 
-Mandatory and always active. After decisions, discoveries, or completed deliverable work, call `mem_save`. Before session close, call `mem_session_summary`.
+La skill `consulting-driven-delivery` contiene el flujo y los comandos disponibles.
 
-Use `capture_prompt: false` for automated CDD phase artifacts.
-
-## CDD Subagents
-
-| Subagent | Purpose |
-|----------|---------|
-| `cdd-init` | Initialize consulting context + skill registry |
-| `cdd-explore` | Relevamiento (transcripts, client-docs, repos) |
-| `cdd-propose` | Propuesta de entregable |
-| `cdd-spec` | Criterios de aceptaciÃ³n |
-| `cdd-design` | Estructura doc + mapa fuentes |
-| `cdd-tasks` | Desglose secciones/anexos |
-| `cdd-apply` | Redactar en `docs/draft/` |
-| `cdd-verify` | QA pre-cliente (grep + revisores) |
-| `cdd-archive` | Sync canÃ³nicos + cierre |
-
-Also available: `review-client-facing`, `review-canonical-alignment`, `judgment-day`, `onboarding`.
-
-## Commands
-
-- `/onboarding` â€” guia post-generacion (workspace raiz, MCP, proximos pasos)
-- `/cdd-init` â€” initialize CDD context
-- `/cdd-explore <topic>` â€” relevamiento
-- `/cdd-status [change]` â€” read-only status from Engram
-- `/cdd-apply [change]` â€” redactar entregable
-- `/cdd-verify [change]` â€” validar antes de Pandoc
-- `/cdd-archive [change]` â€” cerrar cambio
-
-Meta-commands (orchestrator handles):
-- `/cdd-new <change>` â€” explore â†’ propose
-- `/cdd-continue [change]` â€” next ready phase
-- `/cdd-ff <name>` â€” fast-forward propose â†’ spec â†’ design â†’ tasks
-
-## CDD Init Guard
-
-Before ANY CDD command, search Engram for `cdd-init/{project}`. If missing, delegate `cdd-init` first silently.
-
-## Execution Mode
-
-First `/cdd-new` in session: ask **Interactive** (default) vs **Automatic**. Cache choice.
-
-Interactive: show summary between phases, ask before continuing.
-
-## Artifact Store
-
-Default `engram` when available. Options: `engram`, `openspec`, `hybrid`, `none`. Cache for session.
-
-**Do NOT** use `gentle-ai sdd-status` / `sdd-continue` dispatcher for CDD â€” resolve from Engram topic keys `cdd/{change}/...`.
-
-## Dependency Graph
-
-```
-proposal -> spec --> tasks -> apply -> verify -> archive
-             ^
-             |
-           design
-```
-
-## Result Contract
-
-Each phase returns: `status`, `executive_summary`, `artifacts`, `next_recommended`, `risks`, `skill_resolution`.
-
-## Gatekeeper (Automatic mode)
-
-After each phase, validate artifact exists in Engram before next phase. On fail, retry once with feedback.
-
-## Skill Resolution
-
-Before delegation:
-1. Read `.atl/skill-registry.md` or Engram `skill-registry`
-2. Filter via `.atl/stack-profile.json` excludeSkills
-3. Inject paths in `## Skills to load before work`
-
-## Engram Topic Keys
-
-| Artifact | Topic Key |
-|----------|-----------|
-| Project context | `cdd-init/{project}` |
-| Exploration | `cdd/{change}/explore` |
-| Proposal | `cdd/{change}/proposal` |
-| Spec | `cdd/{change}/spec` |
-| Design | `cdd/{change}/design` |
-| Tasks | `cdd/{change}/tasks` |
-| Apply progress | `cdd/{change}/apply-progress` |
-| Verify report | `cdd/{change}/verify-report` |
-| Archive report | `cdd/{change}/archive-report` |
-| State | `cdd/{change}/state` |
-
-## Consulting Trigger Rules
-
-- After **cdd-apply** completes: strongly recommend `judgment-day` on draft files.
-- Before **regenerating .docx** (Pandoc): require `cdd-verify` pass.
-- Before client-facing export: run `review-client-facing` + `review-canonical-alignment` in parallel.
-
-## Prohibited
-
-- SDD commands (`/sdd-new`) unless user explicitly switches to dev workflow
-- Pre-commit/pre-PR dev review triggers (4R, chained PR)
-- Running tests/builds as deliverable validation
-
-## Delegation Triggers
-
-Same as Gentle AI orchestrator: 4-file rule, multi-file write rule, fresh review for verify/archive.
-
-## Model Assignments
-
-| Phase | Model |
-|-------|-------|
-| cdd-explore | sonnet |
-| cdd-propose | opus |
-| cdd-spec | sonnet |
-| cdd-design | opus |
-| cdd-tasks | sonnet |
-| cdd-apply | sonnet |
-| cdd-verify | sonnet |
-| cdd-archive | haiku |
-| default | sonnet |

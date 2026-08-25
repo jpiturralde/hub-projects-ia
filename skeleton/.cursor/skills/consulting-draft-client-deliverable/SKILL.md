@@ -1,5 +1,5 @@
 ---
-name: draft-client-deliverable
+name: consulting-draft-client-deliverable
 description: "Redacta entregables orientados al cliente ({{CLIENT_DISPLAY_NAME}} — {{INITIATIVE_DISPLAY_NAME}}) desde Markdown; DOCX/Google Docs. Reportes, anexos, arquitectura."
 ---
 

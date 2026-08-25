@@ -1,46 +1,19 @@
-﻿---
-description: Consulting Copilot router â€” engagement metadata, domain skills, no SDD/dev triggers
+---
+description: Router compacto para proyectos de consultoría y arquitectura
 alwaysApply: true
 ---
 # Consulting Copilot
 
-Perfil de consultorÃ­a activo. Este proyecto usa **Consulting Copilot** para encargos de documentaciÃ³n, arquitectura y entregables al cliente.
+1. Leer `PROJECT-CONTEXT.md` y `.consulting-engagement.json`.
+2. Tratar `SPEC.md` como alcance canónico; entregables y borradores no son canónicos.
+3. Aplicar una sola regla/skill de dominio según la tarea; no precargar reglas no relacionadas.
+4. Respetar el presupuesto de `context-budget.mdc`.
+5. Si `stackProfile` es `consulting-ai`, Gentle AI global/workspace es la autoridad para políticas, delegación, skills y Engram. Esta capa sólo adapta el trabajo a consultoría.
+6. CDD significa **Consulting-Driven Delivery** y se usa para entregables complejos. SDD se usa sólo ante trabajo de desarrollo explícito.
 
-## DetecciÃ³n de perfil (obligatorio al inicio)
-
-1. Leer `.consulting-engagement.json` en la raÃ­z del workspace.
-2. Si no existe, leer `.workbench-metadata.json` (retrocompat).
-3. Confirmar `stackProfile`: `consulting-only` o `full`.
-
-## Reglas de dominio (cargar segÃºn contexto)
-
-| Contexto | Regla / skill |
-|----------|---------------|
-| Entregables al cliente | `client-deliverables.mdc`, `deliverable-draft-workflow.mdc` |
-| ArchiMate / diagramas | `archimate-canonical-model.mdc`, `archimate-drawio-layout.mdc`, `c4-dynamic-drawio.mdc`, `diagram-notes-lifecycle.mdc` |
-| Transcripts | `transcripts-immutable.mdc` |
-| Redactar entregables | skill `draft-client-deliverable` |
-| Bootstrap del encargo | skill `bootstrap-consulting-engagement` |
-| Primer arranque / MCP / workspace | skill `onboarding`, comando **`/onboarding`** |
-| AnÃ¡lisis de cÃ³digo del cliente | skill `code-technical-analysis` |
-| Docs legibles | skill `cognitive-doc-design` (si estÃ¡ en registry) |
-
-## Fuente de verdad de alcance
-
-- **`SPEC.md`** es la fuente canÃ³nica de alcance del encargo.
-- Los entregables en `docs/deliverables/` **no** son canÃ³nicos; reflejan lo ya respaldado en fuentes internas.
-
-## QuÃ© NO aplicar en este perfil
-
-- No usar SDD (`/sdd-new`, `/sdd-apply`) salvo que `stackProfile` sea `full` y el usuario invoque CDD explÃ­citamente.
-- No aplicar triggers de pre-commit/pre-PR de desarrollo (4R, chained PR, go-testing).
-- No correr tests ni builds como validaciÃ³n de entregables.
-
-## Modo `full`
-
-Si `stackProfile` es `full`, ademÃ¡s aplica la regla `gentle-ai-consulting.mdc` para orquestaciÃ³n CDD (`/cdd-new`, `/cdd-continue`, etc.).
-
-## Idioma de artefactos
-
-- **Entregables al cliente:** espaÃ±ol formal rioplatense (skill `draft-client-deliverable`).
-- **Documentos internos** (SPEC, ARCHITECTURE, gaps): espaÃ±ol tÃ©cnico neutral salvo preferencia del usuario.
+Rutas:
+- Cliente: `consulting-draft-client-deliverable`.
+- Arquitectura/diagramas: reglas ArchiMate, C4 y Draw.io.
+- Reuniones: `transcription-to-actions`; `transcripts/` es inmutable por defecto.
+- Código del cliente: `consulting-code-technical-analysis`.
+- Inicio: `/start-task`; entorno: `/onboarding`.

@@ -1,16 +1,19 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Alias retrocompatible — delega en New-ConsultingCopilotProject.ps1 con perfil Consulting.
+  Alias retrocompatible — delega en New-ConsultingCopilotProject.ps1 con perfil ConsultingAI.
 
 .DESCRIPTION
   Conserva el nombre antiguo para scripts o documentación que aún invoquen New-IngeniaTemplateProject.ps1.
-  Equivalente a: New-ConsultingCopilotProject.ps1 -StackProfile Consulting @args
+  Equivalente a: New-ConsultingCopilotProject.ps1 -StackProfile ConsultingAI @args
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $false)]
   [string] $TargetPath,
+
+  [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')]
+  [string] $GentleAiScope = 'Auto',
 
   [Parameter(Mandatory = $false)]
   [string] $ClientDisplayName,
@@ -50,7 +53,7 @@ param(
   [switch] $IncludeArchiMcp,
 
   [Parameter(Mandatory = $false)]
-  [bool] $IncludeClaudeCoworkLayer = $true,
+  [bool] $IncludeClaudeCoworkLayer = $false,
 
   [switch] $Force
 )
@@ -62,6 +65,7 @@ if (-not (Test-Path -LiteralPath $main)) {
 
 $params = @{}
 if ($PSBoundParameters.ContainsKey('TargetPath')) { $params['TargetPath'] = $TargetPath }
+$params['GentleAiScope'] = $GentleAiScope
 if ($PSBoundParameters.ContainsKey('ClientDisplayName')) { $params['ClientDisplayName'] = $ClientDisplayName }
 if ($PSBoundParameters.ContainsKey('ClientSlug')) { $params['ClientSlug'] = $ClientSlug }
 if ($PSBoundParameters.ContainsKey('InitiativeDisplayName')) { $params['InitiativeDisplayName'] = $InitiativeDisplayName }
@@ -81,4 +85,4 @@ if ($PSBoundParameters.ContainsKey('IncludeArchiMcp')) { $params['IncludeArchiMc
 if ($PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) { $params['IncludeClaudeCoworkLayer'] = $IncludeClaudeCoworkLayer }
 if ($PSBoundParameters.ContainsKey('Force')) { $params['Force'] = $Force.IsPresent }
 
-& $main @params -StackProfile Consulting
+& $main @params -StackProfile ConsultingAI

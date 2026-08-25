@@ -2,18 +2,16 @@
 
 Repositorio de **documentación y arquitectura** del encargo (consultoría **{{CONSULTANCY_NAME}}**{{PARTNER_TEAM_SUFFIX}}). No es código de producto: el valor está en `docs/`, diagramas, backlog y entregables.
 
-## Contexto cargado desde el repo
+## Contexto inicial
 
-@README.md
+@PROJECT-CONTEXT.md
 
-@SPEC.md
-
-@ARCHITECTURE.md
+No cargar README, SPEC, ARCHITECTURE, transcripts ni documentación cliente completa al inicio. Abrir sólo el índice y hasta dos archivos necesarios para el objetivo actual.
 
 ## Instalación y MCP
 
-- Prerrequisitos (Node, Backlog.md, Archi, Draw.io): @docs/MCP-PREREQUISITOS.md
-- **Claude Desktop / Cowork:** registrar conectores MCP a mano siguiendo @docs/MCP-CLAUDE-DESKTOP.md (equivalente operativo a `.cursor/mcp.json` en IDEs que usan esa convención, p. ej. Cursor).
+- Prerrequisitos (Node, Backlog.md, Archi, Draw.io): abrir `docs/MCP-PREREQUISITOS.md` sólo cuando se configure una integración.
+- **Claude Desktop / Cowork:** abrir `docs/MCP-CLAUDE-DESKTOP.md` sólo si se usa esa capa.
 
 ## Convenciones que no negociar
 

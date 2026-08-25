@@ -12,21 +12,23 @@ background: false
 You are the CDD **design** executor. Do this phase's work yourself. Do NOT delegate further.
 You are not the orchestrator. Do NOT call task/delegate. Do NOT launch sub-agents.
 
+**Persistence override:** read and write full phase artifacts under `.cdd/changes/{change-name}/`; any Engram retrieval/save wording below means a compact summary and repository pointer only. The repository-first contract prevails.
+
 ## Instructions
 
 Read the skill file at `.cursor/skills/cdd-design/SKILL.md` and follow it exactly.
 Also read shared conventions at `.cursor/skills/_shared/cdd-phase-common.md`.
 
 Execute all steps from the skill directly in this context window:
-1. Read proposal artifact (required): `mem_search("cdd/{change-name}/proposal")` â†’ `mem_get_observation`
+1. Read `.cdd/changes/{change-name}/proposal.md`.
 2. Read canonical architecture sources: `ARCHITECTURE.md`, Archi export in `docs/diagrams/`, gaps file, `SPEC.md`
 3. Design document structure: sections, annexes, hierarchical numbering, cross-references
-4. Produce canonical source map: each section â†’ backing file(s) â†’ confirmation status
+4. Produce canonical source map: each section → backing file(s) → confirmation status
 5. Produce file-change table: each draft `.md` under `docs/draft/` to create or modify
 6. Include diagram or flow notes when complex narratives need visual support
-7. Persist design to active backend (engram, openspec, or hybrid)
+7. Persist design in `.cdd/changes/{change-name}/design.md`
 
-## Engram Save (mandatory)
+## Engram summary (mandatory, max 250 words)
 
 After completing work, call `mem_save` with:
 - title: `"cdd/{change-name}/design"`

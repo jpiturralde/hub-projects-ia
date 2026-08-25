@@ -23,17 +23,21 @@ If you ARE the `cdd-init` sub-agent (NOT the orchestrator), the gate above does 
 ## Language Domain Contract
 
 - **CDD internal artifacts** (registry, init context): neutral professional Spanish unless the user requests otherwise.
-- **Client deliverables** (future phases): formal Spanish per `draft-client-deliverable`.
+- **Client deliverables** (future phases): formal Spanish per `consulting-draft-client-deliverable`.
 - **Chat with user:** match user language.
 
 ## Activation Contract
 
 Run when the orchestrator/user asks to initialize CDD in a consulting project. You are the phase executor: do the work yourself, do not delegate.
 
+## Persistencia repo-first
+
+Escribir el contexto completo en `.cdd/project-context.md` y usar Engram sólo para un resumen de hasta 250 palabras con decisiones, riesgos y puntero. El modo fijo del perfil es `hybrid-repo-first`.
+
 ## Consulting Hard Rules
 
 - This is a **documentation/consulting** engagement — do NOT detect or configure `strict_tdd`, test runners, coverage, or dev CI.
-- Do NOT create `openspec/` unless the user explicitly chose `openspec` or `hybrid` artifact store.
+- Do NOT create `openspec/`: CDD usa `.cdd/` y Engram como memoria resumida.
 - Do NOT include dev-only skills in the registry: `go-testing`, `branch-pr`, `chained-pr`, `work-unit-commits`.
 - Do NOT run unit tests, builds, or PR workflows as part of init.
 
@@ -46,7 +50,7 @@ Run when the orchestrator/user asks to initialize CDD in a consulting project. Y
 
 From the orchestrator:
 - Project name (or derive from workspace)
-- Artifact store mode (`engram | openspec | hybrid | none`) — default `engram` for consulting
+- Persistence mode: `hybrid-repo-first`
 
 ## Execution Steps
 
@@ -54,7 +58,7 @@ From the orchestrator:
 
 Read `.consulting-engagement.json` (fallback `.workbench-metadata.json`) and extract:
 - `stackProfile`, client/initiative names, slugs, ArchiMate export filenames, doc title prefix, consultancy metadata
-- Confirm `stackProfile` is `full` when CDD orchestration applies
+- Confirm `stackProfile` is `consulting-ai` (accept `full` only as legacy metadata)
 
 ### Step 2: Inspect Project Context
 
@@ -71,13 +75,14 @@ Scan `.cursor/skills/` (project + overlays) and build `.atl/skill-registry.md`:
 - List each skill with trigger/description and absolute `SKILL.md` path
 - **Exclude** dev-only skills: `go-testing`, `branch-pr`, `chained-pr`, `work-unit-commits`
 - Also apply `excludeSkills` from `.atl/stack-profile.json` when present
-- **Prefer** consulting skills: `draft-client-deliverable`, `bootstrap-consulting-engagement`, `code-technical-analysis`, `cognitive-doc-design`, `cdd-*`, `judgment-day`
+- **Prefer** consulting skills: `consulting-draft-client-deliverable`, `bootstrap-consulting-engagement`, `consulting-code-technical-analysis`, `cognitive-doc-design`, `cdd-*`, `judgment-day`
 
 Do NOT configure or mention `strict_tdd`.
 
 ### Step 4: Persist Initialization
 
-**Engram (default):**
+1. Write full init context to `.cdd/project-context.md`.
+2. Save a compact Engram summary:
 ```
 mem_save(
   title: "cdd-init/{project}",
@@ -85,15 +90,13 @@ mem_save(
   type: "architecture",
   project: "{project}",
   capture_prompt: false,
-  content: "{init context markdown}"
+  content: "{summary, decisions, risks, pointer to .cdd/project-context.md}"
 )
 ```
 
-Init context MUST include: engagement metadata summary, artifact store mode, canonical file paths, skill registry snapshot, excluded dev skills note, next recommended phase.
+The repository context MUST include engagement metadata, canonical paths, registry snapshot, excluded dev skills and next phase.
 
 Also save `skill-registry` observation when Engram is available.
-
-**openspec/hybrid:** follow openspec bootstrap only if explicitly requested — consulting default is Engram-only.
 
 ### Step 5: Return Result
 

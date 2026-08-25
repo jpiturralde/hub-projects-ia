@@ -1,5 +1,5 @@
 ---
-name: code-technical-analysis
+name: consulting-code-technical-analysis
 description: Use when the user requests strict evidence-based technical analysis of a repository—reverse engineering and architectural discovery from literal code only. Covers OpenAPI vs source vs config classification, technologies with versions from files, internal imports, external systems with derivation rules, mandatory JSON output, and repository consolidation without inference.
 ---
 

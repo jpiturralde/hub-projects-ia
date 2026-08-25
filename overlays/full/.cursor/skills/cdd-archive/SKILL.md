@@ -1,6 +1,6 @@
 ﻿---
 name: cdd-archive
-description: "Archive a completed CDD change â€” sync canonical sources and close the deliverable cycle. Trigger: orchestrator launches cdd-archive after verify pass."
+description: "Archive a completed CDD change — sync canonical sources and close the deliverable cycle. Trigger: orchestrator launches cdd-archive after verify pass."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
@@ -11,19 +11,23 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR â€” STOP. Do NOT execute these instructions inline. Delegate to
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
 > the dedicated `cdd-archive` sub-agent using your platform's delegation primitive
 > (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
 > only.
 
 ## Executor Override
 
-If you ARE the `cdd-archive` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor â€” execute.
+If you ARE the `cdd-archive` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Language Domain Contract
 
 - **Archive report:** neutral professional Spanish unless the user requests otherwise.
 - **Chat with user:** match user language.
+
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
 
 ## Purpose
 
@@ -31,10 +35,10 @@ You are a sub-agent responsible for **CIERRE DE CAMBIO CDD**. You confirm verifi
 
 ## Consulting Hard Rules
 
-- Deliverables are NOT canonical â€” ensure **canonical files reflect truth** before closing; drafts should already mirror backed-up content.
+- Deliverables are NOT canonical — ensure **canonical files reflect truth** before closing; drafts should already mirror backed-up content.
 - **NO unit tests, NO builds, NO go test** as archive gates.
 - **NO PR creation** unless user explicitly requests git workflow.
-- CRITICAL issues in `verify-report` **block archive** â€” no override for CRITICAL verification failures.
+- CRITICAL issues in `verify-report` **block archive** — no override for CRITICAL verification failures.
 
 ## Shared Contract
 
@@ -45,20 +49,12 @@ You are a sub-agent responsible for **CIERRE DE CAMBIO CDD**. You confirm verifi
 
 From the orchestrator:
 - Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Persistence mode (`hybrid-repo-first`)
 - Optional: explicit user override for intentional partial archive
 
-## Engram Retrieval
+## Repository retrieval
 
-Required â€” read ALL artifacts for change:
-- `cdd/{change-name}/proposal`
-- `cdd/{change-name}/spec`
-- `cdd/{change-name}/design`
-- `cdd/{change-name}/tasks`
-- `cdd/{change-name}/apply-progress`
-- `cdd/{change-name}/verify-report`
-
-Record all observation IDs in archive report for traceability.
+Read `.cdd/changes/{change-name}/state.json` and `verify-report.md`. Open another phase artifact only to resolve a named inconsistency. Record repository paths, not duplicated observation bodies.
 
 ## Execution Steps
 
@@ -69,13 +65,13 @@ Follow **Section A** from `../_shared/cdd-phase-common.md`.
 ### Step 2: Verification Gate
 
 Read `verify-report`:
-- Verdict MUST be `PASS` or `PASS WITH WARNINGS` â€” never archive on `FAIL`
-- CRITICAL issues MUST be zero â€” if any CRITICAL remains, STOP `blocked`
+- Verdict MUST be `PASS` or `PASS WITH WARNINGS` — never archive on `FAIL`
+- CRITICAL issues MUST be zero — if any CRITICAL remains, STOP `blocked`
 - Grep gate MUST have passed (zero internal-ref hits)
 
 Read tasks artifact:
 - All writing/canonical tasks SHOULD be `[x]`
-- If unchecked tasks remain but verify-report proves completion, only proceed with explicit orchestrator override â€” record reconciliation reason
+- If unchecked tasks remain but verify-report proves completion, only proceed with explicit orchestrator override — record reconciliation reason
 
 ### Step 3: Sync Canonical Sources
 
@@ -89,7 +85,7 @@ Ensure git canonical files are current per `persistence-contract.md`:
 | Scope (if changed) | `SPEC.md` | Update only if user confirmed scope change |
 | Deliverable index | `docs/deliverables/README.md` | Update "Current files" table if new annex |
 
-Do NOT copy deliverable draft text into canonical files verbatim without structuring â€” port facts and decisions.
+Do NOT copy deliverable draft text into canonical files verbatim without structuring — port facts and decisions.
 
 ### Step 4: Confirm Draft State
 
@@ -99,13 +95,13 @@ List `docs/draft/*.md` files for this change:
 
 ### Step 5: Close Change in Engram
 
-Save archive report â€” this is the audit trail closing the cycle.
+Save archive report — this is the audit trail closing the cycle.
 
 Optional: save final `cdd/{change-name}/state` as `archived` if orchestrator uses state keys.
 
 ### Step 6: Persist Archive Report
 
-**Mandatory â€” do NOT skip.**
+**Mandatory — do NOT skip.**
 
 Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - artifact: `archive-report`
@@ -127,14 +123,14 @@ Archive report MUST include:
 
 **Change**: {change-name}
 
-### VerificaciÃ³n
+### Verificación
 - Verdict: {PASS / PASS WITH WARNINGS}
 - Verify report ID: {id}
 
-### CanÃ³nicos sincronizados
-| Archivo | AcciÃ³n | Detalle |
+### Canónicos sincronizados
+| Archivo | Acción | Detalle |
 |---------|--------|---------|
-| ARCHITECTURE.md | Updated | {Â§} |
+| ARCHITECTURE.md | Updated | {§} |
 | docs/architecture-gaps-and-questions.md | Updated | {gaps closed} |
 
 ### Entregable draft
@@ -149,7 +145,7 @@ Archive report MUST include:
 | archive-report | {id} |
 
 ### Ciclo CDD completo
-Listo para el prÃ³ximo cambio o regeneraciÃ³n Pandoc (post-verify).
+Listo para el próximo cambio o regeneración Pandoc (post-verify).
 ```
 
 ## Result Contract Fields
@@ -177,7 +173,7 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 - NEVER archive when verify verdict is FAIL or CRITICAL issues remain
 - ALWAYS sync `ARCHITECTURE.md` and `docs/architecture-gaps-and-questions.md` when change touched them
 - ALWAYS record Engram observation IDs in archive report
-- Archive is AUDIT TRAIL â€” do not delete prior Engram observations
+- Archive is AUDIT TRAIL — do not delete prior Engram observations
 - Do NOT run dev tests as archive validation
 - If canonical sync would be destructive (large removals), WARN orchestrator before applying
 - Return envelope per **Section D** from `../_shared/cdd-phase-common.md`

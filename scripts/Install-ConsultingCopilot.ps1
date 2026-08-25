@@ -1,28 +1,18 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Valida prerequisitos globales para Consulting Copilot y Gentle AI.
-
-.PARAMETER StackProfile
-  GentleAi | Consulting | Full (default Full)
-
-.EXAMPLE
-  .\Install-ConsultingCopilot.ps1 -StackProfile Full
+  Diagnóstico de prerrequisitos. No instala ni modifica Gentle AI.
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $false)]
-  [ValidateSet('GentleAi', 'Consulting', 'Full')]
-  [string] $StackProfile = 'Full'
+  [ValidateSet('GentleAi', 'Consulting', 'ConsultingAI', 'Full')]
+  [string] $StackProfile = 'ConsultingAI',
+  [string] $TargetPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
-
-function Test-CommandExists {
-  param([string] $Name)
-  return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
-}
+Import-Module (Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1') -Force
 
 function Write-Check {
   param([string] $Label, [bool] $Ok, [string] $Detail = '')
@@ -31,48 +21,46 @@ function Write-Check {
   if ($Detail) { Write-Host "     $Detail" }
 }
 
-Write-Host "Consulting Copilot — verificación de prerequisitos ($StackProfile)" -ForegroundColor Cyan
+$effectiveProfile = if ($StackProfile -eq 'Full') { 'ConsultingAI' } else { $StackProfile }
+$needsGentle = $effectiveProfile -in @('GentleAi', 'ConsultingAI')
+$environment = Get-GentleAiEnvironment -TargetPath $TargetPath
+
+Write-Host "Consulting Copilot — diagnóstico ($effectiveProfile)" -ForegroundColor Cyan
 Write-Host ''
 
-$needsGentle = $StackProfile -in @('GentleAi', 'Full')
-$needsConsulting = $StackProfile -in @('Consulting', 'Full')
-
 if ($needsGentle) {
-  Write-Host '--- Gentle AI ---'
-  $gentle = Test-CommandExists 'gentle-ai'
-  Write-Check 'gentle-ai CLI' $gentle $(if (-not $gentle) { 'Instalar gentle-ai y agregar al PATH' })
-  if ($gentle) {
-    & gentle-ai doctor 2>&1 | ForEach-Object { Write-Host $_ }
+  Write-Host '--- Gentle AI (sólo lectura) ---'
+  Write-Check 'Un único gentle-ai CLI' ($environment.CliCount -eq 1) $(if ($environment.CliCount -eq 0) {
+    'No encontrado. Instalación estable: go install github.com/gentleman-programming/gentle-ai/v2/cmd/gentle-ai@latest'
+  } elseif ($environment.CliCount -gt 1) { $environment.CliPaths -join '; ' } else { $environment.CliPath })
+  Write-Check 'Configuración global para Cursor' $environment.GlobalInstalled $(if ($environment.GlobalInstalled) {
+    'Se reutilizará automáticamente; la opción workspace queda bloqueada.'
+  } else { 'Al generar se preguntará: Global (recomendado), Proyecto o Cancelar.' })
+  if ($TargetPath) {
+    Write-Check 'Sin Gentle AI duplicado en workspace' (-not ($environment.GlobalInstalled -and $environment.WorkspaceInstalled)) $(if ($environment.WorkspaceInstalled) {
+      $environment.WorkspaceMarkerPaths -join '; '
+    })
+    Write-Check 'Sin Engram duplicado en MCP local' (-not $environment.WorkspaceEngramConfigured) $(if ($environment.WorkspaceEngramConfigured) {
+      $environment.WorkspaceMcpPath
+    })
   }
-  $engram = Test-CommandExists 'engram'
-  Write-Check 'engram CLI' $engram $(if (-not $engram) { 'Requerido para memoria persistente' })
+  if ($environment.CliCount -eq 1) {
+    Write-Host ''
+    & $environment.CliPath doctor 2>&1 | ForEach-Object { Write-Host $_ }
+  }
   Write-Host ''
 }
 
-if ($needsConsulting) {
-  Write-Host '--- Consulting Copilot ---'
-  $node = Test-CommandExists 'node'
-  Write-Check 'Node.js' $node 'Requerido para draw.io MCP (npx @drawio/mcp)'
-  $pandoc = Test-CommandExists 'pandoc'
-  Write-Check 'Pandoc' $pandoc 'Opcional pero recomendado para regenerar .docx'
-  $backlog = Test-CommandExists 'backlog'
-  Write-Check 'Backlog.md CLI' $backlog 'Solo si usarás MCP backlog'
-  Write-Host ''
-  Write-Host 'Documentación MCP: ver MCP-PREREQUISITOS.md en este repo'
+if ($effectiveProfile -in @('Consulting', 'ConsultingAI')) {
+  Write-Host '--- Consultoría ---'
+  $nodePaths = @(Get-CommandExecutablePaths -Name 'node')
+  Write-Check 'Node.js' ($nodePaths.Count -eq 1) 'Requerido sólo si se usa Draw.io MCP.'
+  Write-Check 'Pandoc' (@(Get-CommandExecutablePaths -Name 'pandoc').Count -eq 1) 'Opcional para regenerar DOCX.'
+  Write-Check 'Backlog CLI' (@(Get-CommandExecutablePaths -Name 'backlog').Count -eq 1) 'Opcional.'
   Write-Host ''
 }
 
-Write-Host '--- Próximo paso ---' -ForegroundColor Cyan
-Write-Host @"
-
-Crear un proyecto:
-
-  cd scripts
-  .\New-ConsultingCopilotProject.ps1 -TargetPath "D:\ruta\proyecto" -StackProfile $StackProfile
-
-Perfiles:
-  GentleAi   — solo desarrollo (SDD + Engram)
-  Consulting — solo consultoría (entregables, diagramas)
-  Full       — ambos (CDD + entregables)
-
-"@
+Write-Host 'Crear proyecto:' -ForegroundColor Cyan
+Write-Host '  .\New-ConsultingCopilotProject.ps1 -TargetPath "D:\ruta\proyecto" -StackProfile ConsultingAI'
+Write-Host ''
+Write-Host 'El generador resuelve Gentle AI antes de crear archivos y no corrige instalaciones existentes automáticamente.'

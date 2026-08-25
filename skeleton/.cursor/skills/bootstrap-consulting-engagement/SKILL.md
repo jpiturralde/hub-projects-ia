@@ -23,7 +23,7 @@ description: Instancia o enriquece un repo generado desde Consulting Copilot —
 
 1. Confirmar objetivo: ¿solo README, solo SPEC, o los tres documentos raíz?
 2. Hacer preguntas **solo** sobre huecos no cubiertos por metadata ni por archivos ya existentes con contenido sustancial.
-3. Proponer **edits concretos** (Markdown) alineados al tono de consultoría del skill `draft-client-deliverable` donde aplique texto orientado al cliente; para `SPEC.md` y `ARCHITECTURE.md` puede ser tono más técnico interno si el usuario lo prefiere.
+3. Proponer **edits concretos** (Markdown) alineados al tono de consultoría del skill `consulting-draft-client-deliverable` donde aplique texto orientado al cliente; para `SPEC.md` y `ARCHITECTURE.md` puede ser tono más técnico interno si el usuario lo prefiere.
 4. Dejar placeholders explícitos (`⚠ Pendiente`) donde falte información que solo el cliente pueda confirmar.
 
 ## Preguntas sugeridas (checklist)

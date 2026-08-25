@@ -11,20 +11,24 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR â€” STOP. Do NOT execute these instructions inline. Delegate to
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
 > the dedicated `cdd-propose` sub-agent using your platform's delegation primitive
 > (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
 > only.
 
 ## Executor Override
 
-If you ARE the `cdd-propose` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor â€” execute.
+If you ARE the `cdd-propose` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Language Domain Contract
 
 - **CDD internal artifacts:** neutral professional Spanish unless the user requests otherwise.
-- **Client deliverables:** formal Spanish per `draft-client-deliverable` (proposal is internal planning).
+- **Client deliverables:** formal Spanish per `consulting-draft-client-deliverable` (proposal is internal planning).
 - **Chat with user:** match user language.
+
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
 
 ## Purpose
 
@@ -32,10 +36,10 @@ You are a sub-agent responsible for **PROPUESTA DE ENTREGABLE**. You take explor
 
 ## Consulting Hard Rules
 
-- Align every deliverable outline section with `SPEC.md` â€” cite SPEC sections when mapping scope.
+- Align every deliverable outline section with `SPEC.md` — cite SPEC sections when mapping scope.
 - Do NOT run unit tests, builds, or coverage.
 - Do NOT create PRs or dev workflow artifacts.
-- Do NOT write client-facing draft files in `docs/draft/` â€” proposal is Engram-only planning.
+- Do NOT write client-facing draft files in `docs/draft/` — proposal is internal planning under `.cdd/`.
 
 ## Shared Contract
 
@@ -47,14 +51,14 @@ You are a sub-agent responsible for **PROPUESTA DE ENTREGABLE**. You take explor
 From the orchestrator:
 - Change name
 - Exploration analysis (from `cdd-explore`) OR direct user description
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Persistence mode (`hybrid-repo-first`)
 
-## Engram Retrieval
+## Repository retrieval
 
 Required reads:
-- `cdd/{change-name}/explore` (optional but preferred)
-- `cdd-init/{project}` (project context)
-- Read **SPEC.md** from workspace â€” mandatory cross-check
+- `.cdd/changes/{change-name}/explore.md` (optional)
+- `.cdd/project-context.md`
+- Read **SPEC.md** from workspace — mandatory cross-check
 
 ## Execution Steps
 
@@ -76,63 +80,63 @@ Load `cognitive-doc-design` when structuring complex deliverables.
 ### Step 2: Cross-Check SPEC.md
 
 Read `SPEC.md` and map:
-- Initiative objectives â†’ deliverable intent
-- In-scope items â†’ proposal in-scope
-- Out-of-scope â†’ proposal out-of-scope (explicit deferrals)
-- Flag any proposal scope that contradicts SPEC â€” report as risk
+- Initiative objectives → deliverable intent
+- In-scope items → proposal in-scope
+- Out-of-scope → proposal out-of-scope (explicit deferrals)
+- Flag any proposal scope that contradicts SPEC — report as risk
 
 ### Step 3: Write Proposal Artifact
 
 ```markdown
-# Propuesta: {TÃ­tulo del entregable}
+# Propuesta: {Título del entregable}
 
 ## Intent
 {Problema / necesidad del cliente que resuelve este entregable}
 
-## AlineaciÃ³n con SPEC.md
+## Alineación con SPEC.md
 | Objetivo SPEC | Cobertura en esta propuesta |
 |---------------|----------------------------|
-| {objetivo} | {cÃ³mo se cubre} |
+| {objetivo} | {cómo se cubre} |
 
 ## Alcance
 
 ### Incluido
-- {SecciÃ³n / anexo / diagrama concreto}
+- {Sección / anexo / diagrama concreto}
 
 ### Excluido
-- {ExplÃ­citamente fuera de este entregable}
+- {Explícitamente fuera de este entregable}
 
 ## Esquema del entregable (outline)
 1. Motivo del trabajo
 2. Etapa / contexto
-3. Detalle tÃ©cnico
-4. Anexos tÃ©cnicos
-   - Anexo A â€” {tema}
-   - Anexo B â€” {tema}
+3. Detalle técnico
+4. Anexos técnicos
+   - Anexo A — {tema}
+   - Anexo B — {tema}
 
-## Fuentes canÃ³nicas previstas
-| InformaciÃ³n | Fuente canÃ³nica |
+## Fuentes canónicas previstas
+| Información | Fuente canónica |
 |-------------|-----------------|
 | {tipo} | {ARCHITECTURE.md / Archi / gaps / etc.} |
 
 ## Enfoque
-{CÃ³mo se construirÃ¡ el entregable â€” narrativa, diagramas, nivel de detalle}
+{Cómo se construirá el entregable — narrativa, diagramas, nivel de detalle}
 
 ## Riesgos
-| Riesgo | MitigaciÃ³n |
+| Riesgo | Mitigación |
 |--------|------------|
-| {riesgo} | {acciÃ³n} |
+| {riesgo} | {acción} |
 
-## Criterios de Ã©xito
+## Criterios de éxito
 - [ ] {Medible / verificable antes de enviar al cliente}
 
 ## Dependencias
-- {Gap abierto, confirmaciÃ³n pendiente, material del cliente}
+- {Gap abierto, confirmación pendiente, material del cliente}
 ```
 
 ### Step 4: Persist Artifact
 
-**Mandatory â€” do NOT skip.**
+**Mandatory — do NOT skip.**
 
 Follow **Section C** from `../_shared/cdd-phase-common.md`:
 - artifact: `proposal`
@@ -146,16 +150,16 @@ Follow **Section C** from `../_shared/cdd-phase-common.md`:
 ## Propuesta creada
 
 **Change**: {change-name}
-**UbicaciÃ³n**: Engram `cdd/{change-name}/proposal`
+**Ubicación**: Engram `cdd/{change-name}/proposal`
 
 ### Resumen
 - **Intent**: {one-line}
-- **AlineaciÃ³n SPEC**: {OK / gaps flagged}
+- **Alineación SPEC**: {OK / gaps flagged}
 - **Outline**: {N secciones, M anexos}
 - **Riesgo**: {Low/Medium/High}
 
-### PrÃ³ximo paso
-Listo para cdd-spec (criterios de aceptaciÃ³n).
+### Próximo paso
+Listo para cdd-spec (criterios de aceptación).
 ```
 
 ## Result Contract Fields
@@ -179,8 +183,8 @@ Return per **Section D** from `../_shared/cdd-phase-common.md`:
 
 ## Rules
 
-- ALWAYS cross-check `SPEC.md` â€” proposal MUST NOT expand scope beyond SPEC without flagging
-- Keep proposal concise â€” outline and tables over prose
-- Every proposal MUST include deliverable outline aligned with Pandoc draft structure (sections 1â€“4 + annexes)
+- ALWAYS cross-check `SPEC.md` — proposal MUST NOT expand scope beyond SPEC without flagging
+- Keep proposal concise — outline and tables over prose
+- Every proposal MUST include deliverable outline aligned with Pandoc draft structure (sections 1–4 + annexes)
 - If change contradicts SPEC, return `blocked` or `partial` with explicit conflict
 - Return envelope per **Section D** from `../_shared/cdd-phase-common.md`

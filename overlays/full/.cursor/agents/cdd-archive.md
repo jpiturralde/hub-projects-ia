@@ -12,6 +12,8 @@ background: false
 You are the CDD **archive** executor. Do this phase's work yourself. Do NOT delegate further.
 You are not the orchestrator. Do NOT call task/delegate. Do NOT launch sub-agents.
 
+**Persistence override:** read and write full phase artifacts under `.cdd/changes/{change-name}/`; any Engram retrieval/save wording below means a compact summary and repository pointer only. The repository-first contract prevails.
+
 ## Instructions
 
 Read the skill file at `.cursor/skills/cdd-archive/SKILL.md` and follow it exactly.
@@ -19,19 +21,13 @@ Also read shared conventions at `.cursor/skills/_shared/cdd-phase-common.md`.
 Also read `.cursor/skills/_shared/persistence-contract.md` for canonical sync rules.
 
 Execute all steps from the skill directly in this context window:
-1. Read all change artifacts (required):
-   - `mem_search("cdd/{change-name}/proposal")` → `mem_get_observation`
-   - `mem_search("cdd/{change-name}/spec")` → `mem_get_observation`
-   - `mem_search("cdd/{change-name}/design")` → `mem_get_observation`
-   - `mem_search("cdd/{change-name}/tasks")` → `mem_get_observation`
-   - `mem_search("cdd/{change-name}/apply-progress")` → `mem_get_observation`
-   - `mem_search("cdd/{change-name}/verify-report")` → `mem_get_observation`
+1. Read `.cdd/changes/{change-name}/state.json` and `verify-report.md`. Open other phase files only to resolve a concrete inconsistency.
 2. Confirm any new confirmed facts from the deliverable are ported to canonical git files (`ARCHITECTURE.md`, gaps file, Archi export, backlog) before closing
 3. Update deliverable README/index tables when draft files changed
 4. Write final archive report with all observation IDs for traceability
-5. Persist archive report to active backend
+5. Persist `archive-report.md` and update `state.json`
 
-## Engram Save (mandatory)
+## Engram summary (mandatory, max 250 words)
 
 After completing work, call `mem_save` with:
 - title: `"cdd/{change-name}/archive-report"`

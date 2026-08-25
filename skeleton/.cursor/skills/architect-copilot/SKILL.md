@@ -11,11 +11,11 @@ Usar este skill para ayudar a ejecutar de forma ordenada encargos de consultorí
 
 - **`onboarding`**: primer arranque (workspace + MCP). No sustituye onboarding.
 - **`bootstrap-consulting-engagement`**: rellenar README / SPEC / ARCHITECTURE iniciales.
-- **Perfil Full (`/cdd-*`)**: si el usuario pregunta por el estado de un **entregable CDD** en curso, preferir el skill/comando CDD correspondiente. Este skill cubre el **encargo completo** (backlog, gaps, prioridades del día), no el ciclo de un entregable.
+- **Perfil ConsultingAI (`/cdd-*`)**: si el usuario pregunta por un entregable CDD, usar el comando CDD correspondiente. Este skill cubre el encargo completo.
 
 ## Contexto a leer
 
-Partir desde la raíz del proyecto. Priorizar estas fuentes, si existen:
+Partir de `PROJECT-CONTEXT.md` y aplicar `context-budget.mdc`. Elegir un dominio, su índice y hasta dos archivos; la lista siguiente es un catálogo, no una instrucción de precarga:
 
 - `README.md` — intención del proyecto y navegación.
 - `docs/GETTING-STARTED.md` — checklist post-generación.

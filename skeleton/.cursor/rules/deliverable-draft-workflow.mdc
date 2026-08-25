@@ -1,7 +1,7 @@
 ---
 description: Workflow for drafts in docs/draft/ — compose and regenerate accompaniment .docx
 globs: docs/draft/**
-alwaysApply: true
+alwaysApply: false
 ---
 # Draft workflow — accompaniment document
 

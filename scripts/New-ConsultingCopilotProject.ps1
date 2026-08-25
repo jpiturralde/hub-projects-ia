@@ -1,74 +1,43 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Crea un proyecto con perfil Gentle AI, Consulting Copilot o ambos (Full).
+  Genera proyectos con Gentle AI global-first y perfiles para desarrollo o consultoría.
 
 .DESCRIPTION
   Perfiles:
-  - GentleAi: skeleton mínimo + gentle-ai install --scope workspace
-  - Consulting: skeleton Ingenia + overlay consulting (sin CDD)
-  - Full: skeleton Ingenia + gentle-ai install (SDD/Engram) + overlays consulting + full (CDD)
+  - ConsultingAI (default): skeleton de consultoría + Gentle AI + CDD.
+  - Full: alias retrocompatible de ConsultingAI.
+  - GentleAi: skeleton mínimo orientado a desarrollo.
+  - Consulting: consultoría sin Gentle AI.
 
-.EXAMPLE
-  .\New-ConsultingCopilotProject.ps1 -TargetPath "D:\clientes\iplan" -StackProfile Full `
-    -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
-    -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+  Si existe Gentle AI global, se reutiliza y nunca se ofrece ni ejecuta una
+  instalación workspace. La instalación local sólo está disponible cuando no
+  existe configuración global.
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $false)]
   [string] $TargetPath,
-
-  [Parameter(Mandatory = $false)]
-  [ValidateSet('GentleAi', 'Consulting', 'Full')]
+  [ValidateSet('GentleAi', 'Consulting', 'ConsultingAI', 'Full')]
   [string] $StackProfile,
-
-  [Parameter(Mandatory = $false)]
+  [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')]
+  [string] $GentleAiScope = 'Auto',
   [string] $ProjectName,
-
-  [Parameter(Mandatory = $false)]
   [string] $ClientDisplayName,
-
-  [Parameter(Mandatory = $false)]
   [string] $ClientSlug,
-
-  [Parameter(Mandatory = $false)]
   [string] $InitiativeDisplayName,
-
-  [Parameter(Mandatory = $false)]
   [string] $InitiativeId,
-
-  [Parameter(Mandatory = $false)]
   [string] $ConsultancyName = 'Ingenia',
-
-  [Parameter(Mandatory = $false)]
   [string] $PartnerTeamName,
-
-  [Parameter(Mandatory = $false)]
   [string] $CorporateDocxTemplateName = 'Plantilla Ingenia - 2025.docx',
-
-  [Parameter(Mandatory = $false)]
   [string] $ArchimateExportFilename,
-
-  [Parameter(Mandatory = $false)]
   [string] $ArchimateViewsFilename,
-
-  [Parameter(Mandatory = $false)]
   [string] $BacklogMcpCwd,
-
-  [Parameter(Mandatory = $false)]
   [string[]] $ArchiMcpArgs,
-
-  [Parameter(Mandatory = $false)]
   [string] $EngramPath,
-
   [bool] $IncludeDrawioMcp = $true,
   [switch] $IncludeBacklogMcp,
   [switch] $IncludeArchiMcp,
-
-  [Parameter(Mandatory = $false)]
-  [bool] $IncludeClaudeCoworkLayer = $true,
-
+  [bool] $IncludeClaudeCoworkLayer = $false,
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipHandoffSummary,
   [switch] $Force
@@ -77,200 +46,192 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ModulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
-Import-Module $ModulePath -Force
+$modulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
+Import-Module $modulePath -Force
 
-$TemplateRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$SkeletonPath = Join-Path $TemplateRoot 'skeleton'
-$SkeletonMinimalPath = Join-Path $TemplateRoot 'skeleton-minimal'
-$OverlayConsultingPath = Join-Path $TemplateRoot 'overlays\consulting'
-$OverlayFullPath = Join-Path $TemplateRoot 'overlays\full'
+$templateRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$skeletonPath = Join-Path $templateRoot 'skeleton'
+$skeletonMinimalPath = Join-Path $templateRoot 'skeleton-minimal'
+$overlayConsultingPath = Join-Path $templateRoot 'overlays\consulting'
+$overlayFullPath = Join-Path $templateRoot 'overlays\full'
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
   $TargetPath = Read-ConsultingPrompt 'Ruta absoluta de la carpeta destino (nuevo proyecto)'
 }
-$TargetPath = Test-ConsultingTargetPath -TargetPath $TargetPath -Force:$Force
+if (-not [System.IO.Path]::IsPathRooted($TargetPath.Trim())) {
+  throw "TargetPath debe ser una ruta absoluta. Recibido: $TargetPath"
+}
+$TargetPath = [System.IO.Path]::GetFullPath($TargetPath.Trim())
+if ((Test-Path -LiteralPath $TargetPath) -and -not $Force) {
+  $existingContent = Get-ChildItem -LiteralPath $TargetPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($existingContent) { throw "La carpeta destino no está vacía: $TargetPath" }
+}
 
 if ([string]::IsNullOrWhiteSpace($StackProfile)) {
-  $choice = Read-ConsultingPrompt 'Perfil (GentleAi | Consulting | Full)' 'Full'
+  $choice = Read-ConsultingPrompt 'Perfil (ConsultingAI | Consulting | GentleAi)' 'ConsultingAI'
   $StackProfile = switch ($choice.Trim().ToLowerInvariant()) {
     'gentle-ai' { 'GentleAi' }
     'gentleai' { 'GentleAi' }
     'consulting' { 'Consulting' }
     'consulting-only' { 'Consulting' }
+    'consultingai' { 'ConsultingAI' }
+    'consulting-ai' { 'ConsultingAI' }
     'full' { 'Full' }
     default { $choice }
   }
 }
 
-switch ($StackProfile) {
-  'GentleAi' {
-    if ([string]::IsNullOrWhiteSpace($ProjectName)) {
-      $ProjectName = Split-Path -Leaf $TargetPath
-    }
-    Copy-ConsultingSkeleton -SourcePath $SkeletonMinimalPath -TargetPath $TargetPath
-    $replacements = [ordered]@{ '{{PROJECT_NAME}}' = $ProjectName }
-    Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements $replacements
-    Test-ConsultingPlaceholders -TargetPath $TargetPath
+$requestedProfile = $StackProfile
+$effectiveProfile = if ($StackProfile -eq 'Full') { 'ConsultingAI' } else { $StackProfile }
+$requiresGentleAi = $effectiveProfile -in @('GentleAi', 'ConsultingAI')
+$gentleDecision = $null
+$gentleCliPath = $null
 
-    $engramResolved = Resolve-EngramPath -EngramPath $EngramPath
-    $mcp = Get-ConsultingMcpServers -IncludeEngramMcp $true -EngramPath $engramResolved `
-      -IncludeDrawioMcp $false -IncludeBacklogMcp $false -IncludeArchiMcp $false
-    Write-ConsultingMcpJson -TargetPath $TargetPath -McpServers $mcp
-    Write-ProjectProfile -TargetPath $TargetPath -ProjectName $ProjectName
-    Invoke-GentleAiWorkspaceInstall -TargetPath $TargetPath
-    Copy-ProjectOnboardingLayer -SourceRoot $TemplateRoot -TargetPath $TargetPath
-    if (-not $SkipSkillRegistryRefresh) {
-      Invoke-SkillRegistryRefresh -TargetPath $TargetPath
-    }
-
-    $gsPath = Write-ProjectGettingStarted `
-      -TargetPath $TargetPath `
-      -StackProfile 'GentleAi' `
-      -Title $ProjectName `
-      -IncludeEngramMcp $true
-    Write-Host "Listo. Proyecto Gentle AI generado en: $TargetPath"
-    if (-not $SkipHandoffSummary) {
-      Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile 'GentleAi' -GettingStartedPath $gsPath
-    } else {
-      Write-Host "Continuá en: $gsPath"
+if ($requiresGentleAi) {
+  $preflightEnvironment = Get-GentleAiEnvironment -TargetPath $TargetPath
+  if ($preflightEnvironment.GlobalInstalled -and $preflightEnvironment.WorkspaceInstalled) {
+    throw 'Se detectó Gentle AI global y también en el workspace. Ejecutá el diagnóstico antes de generar.'
+  }
+  if ($preflightEnvironment.GlobalInstalled -and $GentleAiScope -eq 'Workspace') {
+    throw 'No se permite Gentle AI local porque ya existe configuración global.'
+  }
+  if ($preflightEnvironment.WorkspaceInstalled -and $GentleAiScope -eq 'Global') {
+    throw 'El workspace ya contiene Gentle AI; no se instalará otra copia global automáticamente.'
+  }
+  $cliMode = if ($GentleAiScope -eq 'Existing') { 'Existing' } else { 'Auto' }
+  $cliResolution = Ensure-GentleAiCli -Mode $cliMode -AllowConsultingFallback:($effectiveProfile -eq 'ConsultingAI' -and $GentleAiScope -eq 'Auto')
+  if ($cliResolution.FallbackToConsulting) {
+    Write-Warning 'Se continuará con perfil Consulting sin Gentle AI, por elección del usuario.'
+    $effectiveProfile = 'Consulting'
+    $requiresGentleAi = $false
+  } else {
+    $gentleCliPath = $cliResolution.Path
+    $environment = Get-GentleAiEnvironment -TargetPath $TargetPath
+    $gentleDecision = Resolve-GentleAiScopeDecision -Environment $environment -RequestedScope $GentleAiScope
+    if ($gentleDecision.Action -eq 'Install' -and $gentleDecision.Scope -eq 'Global') {
+      Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Global -TargetPath $TargetPath
+      $verified = Get-GentleAiEnvironment -TargetPath $TargetPath
+      if (-not $verified.GlobalInstalled) { throw 'Gentle AI terminó sin dejar una configuración global detectable para Cursor.' }
     }
   }
+}
 
-  { $_ -in @('Consulting', 'Full') } {
-    if ([string]::IsNullOrWhiteSpace($ClientDisplayName)) {
-      $ClientDisplayName = Read-ConsultingPrompt 'Nombre del cliente (display)' 'Cliente'
-    }
-    if ([string]::IsNullOrWhiteSpace($ClientSlug)) {
-      $sug = ConvertTo-ConsultingSlug $ClientDisplayName
-      if ([string]::IsNullOrWhiteSpace($sug)) { $sug = 'cliente' }
-      $ClientSlug = Read-ConsultingPrompt 'Slug del cliente (minúsculas, sin espacios)' $sug
-    }
-    if ($ClientSlug -notmatch '^[a-z0-9][a-z0-9-]*$') {
-      throw "ClientSlug inválido: $ClientSlug"
-    }
-    if ([string]::IsNullOrWhiteSpace($InitiativeDisplayName)) {
-      $InitiativeDisplayName = Read-ConsultingPrompt 'Nombre de la iniciativa / encargo' 'Arquitectura'
-    }
-    if ([string]::IsNullOrWhiteSpace($InitiativeId)) {
-      $InitiativeId = Read-ConsultingPrompt 'Código corto de iniciativa (ej. U01)' 'U01'
-    }
-    if ([string]::IsNullOrWhiteSpace($ArchimateExportFilename)) {
-      $ArchimateExportFilename = "archimate-$ClientSlug-model.xml"
-    }
-    if ([string]::IsNullOrWhiteSpace($ArchimateViewsFilename)) {
-      $ArchimateViewsFilename = "archimate-$ClientSlug-views.drawio"
-    }
-    $DocTitlePrefix = "$ClientDisplayName - $InitiativeDisplayName"
+if (-not [string]::IsNullOrWhiteSpace($EngramPath)) {
+  Write-Warning '-EngramPath se conserva sólo por compatibilidad y se ignora: Engram es administrado por Gentle AI y no se duplica en el MCP local.'
+}
 
-    if (-not $PSBoundParameters.ContainsKey('IncludeBacklogMcp')) {
-      $IncludeBacklogMcp = Read-ConsultingPromptYesNo '¿Incluir MCP backlog (Backlog.md)?' $false
-    }
-    if ($IncludeBacklogMcp -and [string]::IsNullOrWhiteSpace($BacklogMcpCwd)) {
-      $BacklogMcpCwd = Read-ConsultingPrompt 'Ruta absoluta del cwd del repo para backlog' $TargetPath
-    }
-    if (-not $PSBoundParameters.ContainsKey('IncludeArchiMcp')) {
-      $IncludeArchiMcp = Read-ConsultingPromptYesNo '¿Incluir MCP archi (archi-server)?' $false
-    }
-    if ($IncludeArchiMcp -and ($null -eq $ArchiMcpArgs -or $ArchiMcpArgs.Count -eq 0)) {
-      $line = Read-ConsultingPrompt 'Ruta absoluta al index.js de archi-mcp' 'C:\ruta\archi-mcp\dist\index.js'
-      $ArchiMcpArgs = $line -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-    }
+$TargetPath = Test-ConsultingTargetPath -TargetPath $TargetPath -Force:$Force
 
-    Copy-ConsultingSkeleton -SourcePath $SkeletonPath -TargetPath $TargetPath
-    if ($StackProfile -eq 'Full') {
-      Invoke-GentleAiWorkspaceInstall -TargetPath $TargetPath -Force:$Force
-    }
-    Copy-ProjectOverlay -OverlayPath $OverlayConsultingPath -TargetPath $TargetPath
-    if ($StackProfile -eq 'Full') {
-      Copy-ProjectOverlay -OverlayPath $OverlayFullPath -TargetPath $TargetPath
-    }
-
-    Rename-ConsultingArchimateTemplates -TargetPath $TargetPath `
-      -ArchimateExportFilename $ArchimateExportFilename `
-      -ArchimateViewsFilename $ArchimateViewsFilename
-
-    $replacements = Get-ConsultingTokenReplacements `
-      -ClientDisplayName $ClientDisplayName `
-      -ClientSlug $ClientSlug `
-      -InitiativeDisplayName $InitiativeDisplayName `
-      -InitiativeId $InitiativeId `
-      -ConsultancyName $ConsultancyName `
-      -PartnerTeamName $PartnerTeamName `
-      -DocTitlePrefix $DocTitlePrefix `
-      -ArchimateExportFilename $ArchimateExportFilename `
-      -ArchimateViewsFilename $ArchimateViewsFilename `
-      -CorporateDocxTemplateName $CorporateDocxTemplateName
-    Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements $replacements
-
-    if (-not $IncludeClaudeCoworkLayer) {
-      Remove-ConsultingClaudeLayer -TargetPath $TargetPath
-    }
-
-    $consultingMcp = Get-ConsultingMcpServers `
-      -IncludeDrawioMcp $IncludeDrawioMcp `
-      -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) `
-      -BacklogMcpCwd $BacklogMcpCwd `
-      -IncludeArchiMcp ([bool]$IncludeArchiMcp) `
-      -ArchiMcpArgs $ArchiMcpArgs `
-      -IncludeEngramMcp $false
-
-    if ($StackProfile -eq 'Full') {
-      $engramResolved = Resolve-EngramPath -EngramPath $EngramPath
-      $engramMcp = Get-ConsultingMcpServers -IncludeEngramMcp $true -EngramPath $engramResolved `
-        -IncludeDrawioMcp $false -IncludeBacklogMcp $false -IncludeArchiMcp $false
-      $mcp = Merge-ConsultingMcpServers -Primary $consultingMcp -Secondary $engramMcp
-      Write-StackProfileConfig -TargetPath $TargetPath -StackProfileValue 'full'
-    } else {
-      $mcp = $consultingMcp
-      Write-StackProfileConfig -TargetPath $TargetPath -StackProfileValue 'consulting-only'
-    }
-    Write-ConsultingMcpJson -TargetPath $TargetPath -McpServers $mcp
-
-    $stackProfileValue = if ($StackProfile -eq 'Full') { 'full' } else { 'consulting-only' }
-    $metaFields = [ordered]@{
-      clientDisplayName         = $ClientDisplayName
-      clientSlug                = $ClientSlug
-      initiativeDisplayName     = $InitiativeDisplayName
-      initiativeId              = $InitiativeId
-      consultancyName           = $ConsultancyName
-      docTitlePrefix            = $DocTitlePrefix
-      archimateExportFilename   = $ArchimateExportFilename
-      archimateViewsFilename    = $ArchimateViewsFilename
-      corporateDocxTemplateName = $CorporateDocxTemplateName
-      includeDrawioMcp          = [bool]$IncludeDrawioMcp
-      includeBacklogMcp         = [bool]$IncludeBacklogMcp
-      includeArchiMcp           = [bool]$IncludeArchiMcp
-      includeClaudeCoworkLayer  = [bool]$IncludeClaudeCoworkLayer
-    }
-    if (-not [string]::IsNullOrWhiteSpace($PartnerTeamName)) {
-      $metaFields['partnerTeamName'] = $PartnerTeamName.Trim()
-    }
-    Write-EngagementMetadata -TargetPath $TargetPath -StackProfileValue $stackProfileValue -Fields $metaFields
-    Test-ConsultingPlaceholders -TargetPath $TargetPath
-
-    if ($StackProfile -eq 'Full' -and -not $SkipSkillRegistryRefresh) {
-      Invoke-SkillRegistryRefresh -TargetPath $TargetPath
-    }
-
-    $gsPath = Write-ProjectGettingStarted `
-      -TargetPath $TargetPath `
-      -StackProfile $StackProfile `
-      -Title $DocTitlePrefix `
-      -IncludeEngramMcp ($StackProfile -eq 'Full') `
-      -IncludeDrawioMcp ([bool]$IncludeDrawioMcp) `
-      -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) `
-      -IncludeArchiMcp ([bool]$IncludeArchiMcp) `
-      -CorporateDocxTemplateName $CorporateDocxTemplateName
-
-    Write-Host "Listo. Proyecto Consulting Copilot ($StackProfile) generado en: $TargetPath"
-    if ($IncludeClaudeCoworkLayer) {
-      Write-Host 'Capa Anthropic: revisá CLAUDE.md y docs/MCP-CLAUDE-DESKTOP.md'
-    }
-    if (-not $SkipHandoffSummary) {
-      Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $StackProfile -GettingStartedPath $gsPath
-    } else {
-      Write-Host "Continuá en: $gsPath"
-    }
+if ($effectiveProfile -eq 'GentleAi') {
+  if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Split-Path -Leaf $TargetPath }
+  Copy-ConsultingSkeleton -SourcePath $skeletonMinimalPath -TargetPath $TargetPath
+  if ($gentleDecision.Action -eq 'Install' -and $gentleDecision.Scope -eq 'Workspace') {
+    Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Workspace -TargetPath $TargetPath
   }
+  Copy-ProjectOnboardingLayer -SourceRoot $templateRoot -TargetPath $TargetPath
+  Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements ([ordered]@{ '{{PROJECT_NAME}}' = $ProjectName })
+  Write-ProjectProfile -TargetPath $TargetPath -ProjectName $ProjectName -GentleAiScope $gentleDecision.Scope
+  Test-ConsultingPlaceholders -TargetPath $TargetPath
+  if (-not $SkipSkillRegistryRefresh) { Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $gentleCliPath }
+  $gettingStarted = Write-ProjectGettingStarted -TargetPath $TargetPath -StackProfile GentleAi -Title $ProjectName -GentleAiScope $gentleDecision.Scope
+  Write-Host "Listo. Proyecto Gentle AI generado en: $TargetPath"
+  if (-not $SkipHandoffSummary) {
+    Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile GentleAi -GettingStartedPath $gettingStarted -GentleAiScope $gentleDecision.Scope
+  }
+  return
+}
+
+if ([string]::IsNullOrWhiteSpace($ClientDisplayName)) { $ClientDisplayName = Read-ConsultingPrompt 'Nombre del cliente' 'Cliente' }
+if ([string]::IsNullOrWhiteSpace($ClientSlug)) {
+  $suggestedSlug = ConvertTo-ConsultingSlug $ClientDisplayName
+  if (-not $suggestedSlug) { $suggestedSlug = 'cliente' }
+  $ClientSlug = Read-ConsultingPrompt 'Slug del cliente' $suggestedSlug
+}
+if ($ClientSlug -notmatch '^[a-z0-9][a-z0-9-]*$') { throw "ClientSlug inválido: $ClientSlug" }
+if ([string]::IsNullOrWhiteSpace($InitiativeDisplayName)) { $InitiativeDisplayName = Read-ConsultingPrompt 'Nombre de la iniciativa / encargo' 'Arquitectura' }
+if ([string]::IsNullOrWhiteSpace($InitiativeId)) { $InitiativeId = Read-ConsultingPrompt 'Código corto de iniciativa' 'U01' }
+if ([string]::IsNullOrWhiteSpace($ArchimateExportFilename)) { $ArchimateExportFilename = "archimate-$ClientSlug-model.xml" }
+if ([string]::IsNullOrWhiteSpace($ArchimateViewsFilename)) { $ArchimateViewsFilename = "archimate-$ClientSlug-views.drawio" }
+$docTitlePrefix = "$ClientDisplayName - $InitiativeDisplayName"
+
+if (-not $PSBoundParameters.ContainsKey('IncludeBacklogMcp')) {
+  $IncludeBacklogMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Backlog?' $false
+}
+if ($IncludeBacklogMcp -and [string]::IsNullOrWhiteSpace($BacklogMcpCwd)) { $BacklogMcpCwd = $TargetPath }
+if (-not $PSBoundParameters.ContainsKey('IncludeArchiMcp')) {
+  $IncludeArchiMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Archi?' $false
+}
+if ($IncludeArchiMcp -and ($null -eq $ArchiMcpArgs -or $ArchiMcpArgs.Count -eq 0)) {
+  $archiPath = Read-ConsultingPrompt 'Ruta absoluta al index.js de archi-mcp' 'C:\ruta\archi-mcp\dist\index.js'
+  $ArchiMcpArgs = @($archiPath)
+}
+if (-not $PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) {
+  $IncludeClaudeCoworkLayer = Read-ConsultingPromptYesNo '¿Incluir capa opcional Claude/Cowork?' $false
+}
+
+Copy-ConsultingSkeleton -SourcePath $skeletonPath -TargetPath $TargetPath
+if ($requiresGentleAi -and $gentleDecision.Action -eq 'Install' -and $gentleDecision.Scope -eq 'Workspace') {
+  Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Workspace -TargetPath $TargetPath
+}
+Copy-ProjectOverlay -OverlayPath $overlayConsultingPath -TargetPath $TargetPath
+if ($effectiveProfile -eq 'ConsultingAI') { Copy-ProjectOverlay -OverlayPath $overlayFullPath -TargetPath $TargetPath }
+
+Rename-ConsultingArchimateTemplates -TargetPath $TargetPath -ArchimateExportFilename $ArchimateExportFilename -ArchimateViewsFilename $ArchimateViewsFilename
+$replacements = Get-ConsultingTokenReplacements `
+  -ClientDisplayName $ClientDisplayName -ClientSlug $ClientSlug `
+  -InitiativeDisplayName $InitiativeDisplayName -InitiativeId $InitiativeId `
+  -ConsultancyName $ConsultancyName -PartnerTeamName $PartnerTeamName `
+  -DocTitlePrefix $docTitlePrefix -ArchimateExportFilename $ArchimateExportFilename `
+  -ArchimateViewsFilename $ArchimateViewsFilename -CorporateDocxTemplateName $CorporateDocxTemplateName
+Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements $replacements
+
+if (-not $IncludeClaudeCoworkLayer) { Remove-ConsultingClaudeLayer -TargetPath $TargetPath }
+
+$mcp = Get-ConsultingMcpServers `
+  -IncludeDrawioMcp $IncludeDrawioMcp `
+  -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -BacklogMcpCwd $BacklogMcpCwd `
+  -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs
+Write-ConsultingMcpJson -TargetPath $TargetPath -McpServers $mcp
+
+$stackProfileValue = if ($effectiveProfile -eq 'ConsultingAI') { 'consulting-ai' } else { 'consulting-only' }
+Write-StackProfileConfig -TargetPath $TargetPath -StackProfileValue $stackProfileValue
+$gentleScopeValue = if ($requiresGentleAi) { $gentleDecision.Scope } else { 'None' }
+$gentleActionValue = if ($requiresGentleAi) { $gentleDecision.Action } else { 'None' }
+$metaFields = [ordered]@{
+  requestedProfile = $requestedProfile
+  clientDisplayName = $ClientDisplayName
+  clientSlug = $ClientSlug
+  initiativeDisplayName = $InitiativeDisplayName
+  initiativeId = $InitiativeId
+  consultancyName = $ConsultancyName
+  docTitlePrefix = $docTitlePrefix
+  archimateExportFilename = $ArchimateExportFilename
+  archimateViewsFilename = $ArchimateViewsFilename
+  corporateDocxTemplateName = $CorporateDocxTemplateName
+  includeDrawioMcp = [bool]$IncludeDrawioMcp
+  includeBacklogMcp = [bool]$IncludeBacklogMcp
+  includeArchiMcp = [bool]$IncludeArchiMcp
+  includeClaudeCoworkLayer = [bool]$IncludeClaudeCoworkLayer
+  gentleAiScope = $gentleScopeValue.ToLowerInvariant()
+  gentleAiAction = $gentleActionValue.ToLowerInvariant()
+  engramMcpSource = if ($requiresGentleAi) { 'gentle-ai-managed' } else { 'none' }
+}
+if (-not [string]::IsNullOrWhiteSpace($PartnerTeamName)) { $metaFields['partnerTeamName'] = $PartnerTeamName.Trim() }
+Write-EngagementMetadata -TargetPath $TargetPath -StackProfileValue $stackProfileValue -Fields $metaFields
+Test-ConsultingPlaceholders -TargetPath $TargetPath
+
+if ($requiresGentleAi -and -not $SkipSkillRegistryRefresh) {
+  Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $gentleCliPath
+}
+
+$gettingStarted = Write-ProjectGettingStarted `
+  -TargetPath $TargetPath -StackProfile $effectiveProfile -Title $docTitlePrefix `
+  -GentleAiScope $gentleScopeValue -IncludeDrawioMcp $IncludeDrawioMcp `
+  -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -IncludeArchiMcp ([bool]$IncludeArchiMcp) `
+  -CorporateDocxTemplateName $CorporateDocxTemplateName
+
+Write-Host "Listo. Proyecto $effectiveProfile generado en: $TargetPath"
+if ($IncludeClaudeCoworkLayer) { Write-Host 'Capa opcional Claude/Cowork incluida.' }
+if (-not $SkipHandoffSummary) {
+  Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $effectiveProfile -GettingStartedPath $gettingStarted -GentleAiScope $gentleScopeValue
 }

@@ -4,7 +4,7 @@ Same as standard skill resolver with consulting filter:
 
 1. Read `.atl/stack-profile.json` if present.
 2. Exclude skills in `excludeSkills` from delegation.
-3. Prefer consulting skills: `draft-client-deliverable`, `bootstrap-consulting-engagement`, `code-technical-analysis`, `cognitive-doc-design`, `cdd-*`, `judgment-day`.
+3. Prefer consulting skills: `consulting-draft-client-deliverable`, `bootstrap-consulting-engagement`, `consulting-code-technical-analysis`, `cognitive-doc-design`, `cdd-*`, `judgment-day`.
 4. Pass exact `SKILL.md` paths to subagents — never summaries.
 
 Resolution order:

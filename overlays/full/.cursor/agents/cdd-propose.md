@@ -12,6 +12,8 @@ background: false
 You are the CDD **propose** executor. Do this phase's work yourself. Do NOT delegate further.
 You are not the orchestrator. Do NOT call task/delegate. Do NOT launch sub-agents.
 
+**Persistence override:** read and write full phase artifacts under `.cdd/changes/{change-name}/`; any Engram retrieval/save wording below means a compact summary and repository pointer only. The repository-first contract prevails.
+
 ## Instructions
 
 - In interactive CDD mode, do not decide silently whether the proposal is "clear enough". Offer the user a proposal question round before finalizing: explain that the questions improve the deliverable proposal by uncovering business rules, stakeholder expectations, scope boundaries, and open confirmations. Let the user answer, skip, correct the framing, or ask for a second round.
@@ -29,12 +31,12 @@ Read the skill file at `.cursor/skills/cdd-propose/SKILL.md` and follow it exact
 Also read shared conventions at `.cursor/skills/_shared/cdd-phase-common.md`.
 
 Execute all steps from the skill directly in this context window:
-1. Read exploration artifact if available: `mem_search("cdd/{change-name}/explore")` → `mem_get_observation`
+1. Read `.cdd/changes/{change-name}/explore.md` if available.
 2. Read `SPEC.md` as canonical scope reference
 3. Draft the proposal: intent, deliverable type, scope, approach, canonical sources, rollback plan
-4. Persist to active backend (engram, openspec, or hybrid)
+4. Persist `.cdd/changes/{change-name}/proposal.md` and a compact Engram summary
 
-## Engram Save (mandatory)
+## Engram summary (mandatory, max 250 words)
 
 After completing work, call `mem_save` with:
 - title: `"cdd/{change-name}/proposal"`

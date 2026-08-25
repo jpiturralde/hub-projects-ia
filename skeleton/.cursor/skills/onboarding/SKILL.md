@@ -7,7 +7,7 @@ description: "Trigger: onboarding, primeros pasos, como continuar, /onboarding, 
 
 ## Cuando usar
 
-- Proyecto **recien generado** desde Ingenia Hub.
+- Proyecto **recien generado** desde un hub generador.
 - Usuario pregunta como continuar, si Engram/MCP estan bien, o que hacer despues de crear el repo.
 - Comando explicito: **`/onboarding`**.
 
@@ -15,7 +15,7 @@ description: "Trigger: onboarding, primeros pasos, como continuar, /onboarding, 
 
 1. Leer **`docs/GETTING-STARTED.md`** (checklist canonica generada al crear el proyecto).
 2. Leer metadata segun perfil:
-   - **Consulting / Full:** `.consulting-engagement.json`
+   - **Consulting / ConsultingAI:** `.consulting-engagement.json`
    - **GentleAi:** `.project-profile.json`
 3. Leer **`.atl/onboarding-pending.json`** si existe (estado pendiente).
 
@@ -27,8 +27,8 @@ Recorre estos pasos **en orden**. Tras cada paso, confirma con el usuario antes 
 
 Explica:
 
-- Los MCP del proyecto viven en **`.cursor/mcp.json` de este repo**.
-- Si el workspace activo es el **hub padre** (`ingenia-hub-ia`), Engram y otros MCP **no** cargan en el agente aunque el CLI funcione en terminal.
+- Los MCP específicos del proyecto viven en `.cursor/mcp.json`; Engram es administrado por Gentle AI y puede ser global.
+- Si el workspace activo es el hub padre, no se carga el contexto ni el MCP local del hijo.
 - Accion: **File -> Open Folder** -> raiz de **este** repositorio.
 - Luego: **Developer: Reload Window** si hace falta.
 
@@ -38,8 +38,8 @@ Pregunta: "¿Ya tenes esta carpeta abierta como workspace raiz?" Si no, detente 
 
 Guia al usuario a **Cursor Settings -> MCP**:
 
-- Listar servidores esperados segun `.cursor/mcp.json` (tipicamente `engram`, `drawio`, y opcionalmente `backlog`, `archi`).
-- **engram** debe figurar **activo** (verde) para flujos CDD/Gentle AI con memoria MCP.
+- Listar servidores locales esperados según `.cursor/mcp.json`: `drawio` y opcionalmente `backlog`/`archi`.
+- Para ConsultingAI/GentleAi, verificar Engram por separado como integración administrada por Gentle AI. No agregarlo al MCP local.
 - Si **archi** o **backlog** tienen rutas placeholder, indicar editar `.cursor/mcp.json` (ver `docs/MCP-PREREQUISITOS.md`).
 
 Si el usuario reporta Engram solo en CLI: explicar diferencia CLI vs MCP y repetir Paso 0 + Reload.
@@ -53,8 +53,8 @@ Resumir en 3-5 lineas: cliente, iniciativa, `stackProfile`, MCP toggles desde el
 | Perfil | Proximo paso |
 |--------|--------------|
 | **Consulting** | Skill **`bootstrap-consulting-engagement`** + copiar plantilla Word a `docs/templates/` |
-| **Full** | **`bootstrap-consulting-engagement`** -> **`/cdd-init`** -> **`/cdd-new [entregable]`** |
-| **GentleAi** | **`/sdd-init`** -> **`/sdd-new [cambio]`** |
+| **ConsultingAI / Full** | **`/start-task`** -> bootstrap si falta contexto -> **`/cdd-new [entregable]`** si la complejidad lo justifica |
+| **GentleAi** | **`/start-task`**; Gentle AI activa SDD cuando corresponde o cuando el usuario lo pide |
 
 Mencionar **`docs/GETTING-STARTED.md`** como referencia permanente.
 
@@ -84,5 +84,5 @@ Si el usuario dice "rapido" o "solo lo esencial":
 
 ## Prohibido
 
-- No iniciar bootstrap, CDD o SDD automaticamente sin confirmacion del usuario.
+- No iniciar bootstrap, CDD o SDD automáticamente sin confirmación del usuario.
 - No editar `transcripts/` ni entregables al cliente durante onboarding.

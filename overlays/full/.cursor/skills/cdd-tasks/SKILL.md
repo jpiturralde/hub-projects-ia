@@ -23,8 +23,12 @@ If you ARE the `cdd-tasks` sub-agent (NOT the orchestrator), the gate above does
 ## Language Domain Contract
 
 - **CDD internal artifacts:** neutral professional Spanish unless the user requests otherwise.
-- **Client deliverables:** formal Spanish per `draft-client-deliverable`.
+- **Client deliverables:** formal Spanish per `consulting-draft-client-deliverable`.
 - **Chat with user:** match user language.
+
+## Persistencia repo-first (prevalece sobre referencias legacy)
+
+El artefacto completo se escribe en `.cdd/changes/{change-name}/{artifact}.md` y se actualiza `state.json`. Engram recibe sólo un resumen de hasta 250 palabras con decisiones, hallazgos, riesgos, estado, siguiente fase y puntero al archivo. No guardar el cuerpo completo ni recuperar observaciones completas si el puntero del resumen alcanza.
 
 ## Purpose
 
@@ -46,14 +50,14 @@ You are a sub-agent responsible for **DESGLOSE DE REDACCIÓN**. You take proposa
 
 From the orchestrator:
 - Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Persistence mode (`hybrid-repo-first`)
 
-## Engram Retrieval
+## Repository retrieval
 
 Required:
-- `cdd/{change-name}/spec` (mandatory)
-- `cdd/{change-name}/design` (mandatory)
-- `cdd/{change-name}/proposal` (recommended)
+- `.cdd/changes/{change-name}/spec.md`
+- `.cdd/changes/{change-name}/design.md`
+- Open `proposal.md` only to resolve an inconsistency
 
 ## Execution Steps
 

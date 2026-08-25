@@ -1,6 +1,6 @@
 # {{INITIATIVE_DISPLAY_NAME}} — {{CLIENT_DISPLAY_NAME}}
 
-> **¿Proyecto recién generado?** Seguí la checklist en [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) — incluye abrir este repo como workspace raíz y verificar MCP (Engram, etc.).
+> **¿Proyecto recién generado?** Seguí [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md), abrí este repo como workspace raíz y empezá con `/start-task`.
 
 Repositorio de **documentación y planificación** del encargo **{{INITIATIVE_DISPLAY_NAME}}** ({{CONSULTANCY_NAME}} → {{CLIENT_DISPLAY_NAME}}).
 
@@ -21,13 +21,13 @@ Repositorio de **documentación y planificación** del encargo **{{INITIATIVE_DI
 
 En editores compatibles (p. ej. Cursor), la configuración local del proyecto suele vivir aquí:
 
-- `.cursor/mcp.json` — MCPs del proyecto (local; ver `.gitignore`). Ejemplo versionado: `.cursor/mcp.json.example`.
+- `.cursor/mcp.json` — sólo MCPs específicos del proyecto. Engram es administrado por Gentle AI y no se duplica aquí.
 - `.cursor/skills/` — skills del agente (onboarding, bootstrap, architect-copilot, transcripts → acciones, entregables, análisis de código).
 - Prerrequisitos e instalación por SO (Node, Backlog.md, Archi, Draw.io MCP): [docs/MCP-PREREQUISITOS.md](docs/MCP-PREREQUISITOS.md).
 
 ## Capa Anthropic (Claude Cowork / Claude Desktop)
 
-- `CLAUDE.md` — instrucciones persistentes del repo (imports con `@` a README, SPEC, ARCHITECTURE y docs MCP). Si generaste el proyecto con `-IncludeClaudeCoworkLayer:$false`, este archivo no estará presente.
+- `CLAUDE.md` — capa opcional; importa sólo `PROJECT-CONTEXT.md`. Default: no se genera.
 - `.claude/rules/` — reglas por ámbito (p. ej. `transcripts/`, entregables y diagramas). Misma condición que arriba.
 - [docs/MCP-CLAUDE-DESKTOP.md](docs/MCP-CLAUDE-DESKTOP.md) — cómo registrar manualmente los mismos servidores MCP en Claude Desktop / Cowork (equivalente operativo a `.cursor/mcp.json` en el IDE).
 
