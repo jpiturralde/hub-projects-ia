@@ -1,0 +1,6 @@
+# Proyectos generados — cada uno es su propio repo Git
+projects/*
+!projects/.gitkeep
+
+# Mantener exclusiones operativas del entorno local si aplica
+.cursor/projects/

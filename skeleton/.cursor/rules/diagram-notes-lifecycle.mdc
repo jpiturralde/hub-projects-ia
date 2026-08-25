@@ -1,0 +1,19 @@
+---
+description: Lifecycle of ⚠ / ✅ notes on architecture diagrams
+globs: docs/diagrams/**/*.puml,docs/diagrams/**/*.drawio,docs/diagrams/{{ARCHIMATE_VIEWS_FILENAME}}
+alwaysApply: false
+---
+
+# Diagram notes — lifecycle
+
+Diagrams (`.puml`, `.drawio`) use **notes** (⚠ hypothesis, ✅ confirmed, risk) for open observations.
+
+## When resolving a note
+
+1. **Fold the note’s content** into the owning diagram element (container, relation, etc.) and into applicable text docs (`ARCHITECTURE.md`, `docs/architecture-gaps-and-questions.md`, `docs/client-documentation/README.md`).
+2. **Remove the note** once reflected in shapes and prose.
+3. If resolution surfaces new questions, add a fresh **⚠** note on the diagram and log it in `docs/architecture-gaps-and-questions.md`.
+
+## Principle
+
+Notes are temporary; confirmed facts belong **inside** diagram elements and in narrative docs, not in stray callouts forever.

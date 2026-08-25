@@ -1,0 +1,55 @@
+---
+description: Protege el layout manual y estilos ArchiMate 3 del diagrama Draw.io
+globs: docs/diagrams/{{ARCHIMATE_VIEWS_FILENAME}}
+alwaysApply: false
+---
+
+# ArchiMate Draw.io — Layout y estilos protegidos
+
+## Layout manual: no mover coordenadas existentes
+
+Las posiciones (`x`, `y`, `width`, `height`) de cada `mxCell` fueron ajustadas a mano. **No modificarlas** salvo pedido explícito del usuario.
+
+Al **agregar** elementos nuevos, colocarlos en espacio libre sin alterar la geometría de los existentes.
+
+## Ediciones quirúrgicas, no regeneración completa
+
+Si el cambio es parcial (renombrar label, agregar nodo, nueva relación), usar `StrReplace` sobre el fragmento afectado. **No reescribir el archivo completo.**
+
+## Shapes nativos ArchiMate 3
+
+Usar siempre `shape=mxgraph.archimate3.*` con los `appType` / `archiType` correctos:
+
+| Elemento | appType | archiType |
+|---|---|---|
+| Business Actor | `actor` | `square` |
+| Business Process | `proc` | `rounded` |
+| Business Service | `serv` | `rounded` |
+| Application Component | `comp` | `square` |
+| Application Service | `serv` | `rounded` |
+| Technology Device | *(shape `mxgraph.archimate3.device`)* | — |
+| Technology Node | `node` | `square` |
+
+## Colores estándar por layer
+
+| Layer | fillColor |
+|---|---|
+| Business | `#ffff99` |
+| Application | `#99ffff` |
+| Technology | `#AFFFAF` |
+
+## Estilos de relaciones ArchiMate
+
+| Relación | Estilo clave |
+|---|---|
+| Assignment | `startArrow=oval;startFill=1;endArrow=block;endFill=1` |
+| Triggering | `endArrow=block;endFill=1;dashed=0` |
+| Flow | `endArrow=block;endFill=1;dashed=1;dashPattern=6 4` |
+| Realization | `endArrow=block;endFill=0;dashed=1` |
+| Serving | `endArrow=open;endFill=1` |
+| Access | `endArrow=open;endFill=0;dashed=1;dashPattern=1 4` |
+| Composition | `startArrow=diamondThin;startFill=1;startSize=10;endArrow=none` |
+
+## Sin comentarios XML
+
+Draw.io no requiere comentarios `<!-- -->` en el XML. No agregarlos.

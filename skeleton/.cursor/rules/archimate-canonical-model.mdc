@@ -1,0 +1,60 @@
+---
+description: ArchiMate model — Archi as source of truth, editing via MCP from the IDE or agent
+globs: docs/diagrams/{{ARCHIMATE_EXPORT_FILENAME}},docs/diagrams/{{ARCHIMATE_VIEWS_FILENAME}}
+alwaysApply: false
+---
+# ArchiMate — Archi + MCP
+
+## Source of truth
+
+The engagement’s AS-IS ArchiMate model lives in **Archi** (local `.archimate`). An **MCP-enabled IDE or agent** connects in real time via **archi-server MCP** (`localhost:8765`).
+
+| Component | Role |
+|---|---|
+| **Archi** (desktop) | Source of truth. Visual editing, layout, views. |
+| **archi-server MCP** (localhost:8765) | REST + MCP exposing the model to the IDE or agent. |
+| **IDE / agent** | Reads/edits via MCP tools. |
+| `{{ARCHIMATE_EXPORT_FILENAME}}` | Open Exchange XML export for git. Generated from Archi. |
+| `{{ARCHIMATE_VIEWS_FILENAME}}` | Supplementary Draw.io whiteboard for quick sketches. Not canonical. |
+
+## Main workflow (Archi MCP)
+
+1. **Read current state** with `archi_get_health`, `archi_list_views`, `archi_search_model`, `archi_query_model`.
+2. **Plan changes** with `archi_plan_model_changes` before applying (preview, no writes).
+3. **Apply changes** with `archi_apply_model_changes`.
+4. **Verify** by re-querying the model.
+5. **Save** with `archi_save_model`. Export XML from Archi when you need to refresh git.
+
+All operations are reversible with **Ctrl+Z** in Archi.
+
+## Agent rules
+
+- **Read before write.** Inspect current model before proposing changes.
+- **No invented data.** Add elements/links only when supported by docs, transcripts, or explicit user confirmation.
+- **Ask when unclear.** Do not call `archi_plan_model_changes` or mutations if uncertain.
+- **Verify deltas.** When new facts appear, check Archi first and add only what is missing.
+
+## Fallback — hand-edited XML
+
+If Archi is unavailable, you may edit XML manually:
+
+- `{{ARCHIMATE_EXPORT_FILENAME}}` holds `<element>`, `<relationship>`, `<organizations>`, `<views>`.
+- `{{ARCHIMATE_VIEWS_FILENAME}}` holds Draw.io layout (see `archimate-drawio-layout.mdc`).
+- Any draw.io change should be reflected in the XML in the same session when both are edited.
+
+## Export from Archi to git
+
+1. In Archi: **File → Export → Open Exchange XML** → replace `{{ARCHIMATE_EXPORT_FILENAME}}`.
+2. Git retains history.
+
+**Export quirks:**
+- Archi may add harmless `<style>` blocks on nodes/connections.
+- Archi may reorder connections by source node (semantically equivalent).
+- Nested visual nesting can imply Composition `<relationship>`s already in the model.
+
+## Archi MCP prerequisites
+
+- Archi 5.7+ with jArchi 1.11+
+- archi-server installed on this machine
+- Server started in Archi: **Scripts → archi-server → Start Server**
+- MCP endpoints and commands defined in the project MCP config (`.cursor/mcp.json` when using that IDE convention)

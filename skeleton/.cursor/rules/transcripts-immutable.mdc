@@ -1,0 +1,19 @@
+---
+description: Protect transcripts folder as immutable meeting-record source (by default)
+globs: "**/transcripts/**"
+alwaysApply: true
+---
+
+# Transcripts (read-only by default)
+
+Files under any `transcripts/` path are a **faithful record of meetings** (internal team and/or client) and act as **source of truth**.
+
+## Required
+
+- **Do not edit, delete, rename, or reformat** files in `transcripts/` unless the user gives **explicit prior confirmation in the same thread** for **that specific change** (e.g. fixing an agreed typo, moving an agreed file).
+- If summaries, analysis, or derived notes are needed: create or update files **outside** `transcripts/` (e.g. `docs/`, `backlog/meetings/`) and **reference** the transcript instead of replacing it.
+- If the user asks for something that would touch `transcripts/` without clear permission: **ask for explicit confirmation** before applying the change.
+
+## Allowed without extra permission
+
+- **Read** and cite transcripts as source material in other tasks or documents.

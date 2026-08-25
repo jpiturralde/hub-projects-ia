@@ -1,0 +1,60 @@
+﻿{
+    "schemaVersion":  1,
+    "projects":  [
+                     {
+                         "createdAt":  "2026-07-03T17:37:25.5229615-03:00",
+                         "folderName":  "acme-slug-ac001",
+                         "clientSlug":  "acme-slug",
+                         "initiativeId":  "AC001",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\acme-slug-ac001",
+                         "gitInitialized":  true,
+                         "stackProfile":  "Full"
+                     },
+                     {
+                         "createdAt":  "2026-07-06T13:44:26.4638089-03:00",
+                         "folderName":  "slug-cod01",
+                         "clientSlug":  "slug",
+                         "initiativeId":  "COD01",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\slug-cod01",
+                         "gitInitialized":  false,
+                         "stackProfile":  "Full"
+                     },
+                     {
+                         "createdAt":  "2026-07-06T18:11:21.1499381-03:00",
+                         "folderName":  "test-t01",
+                         "clientSlug":  "test",
+                         "initiativeId":  "T01",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\test-t01",
+                         "gitInitialized":  false,
+                         "stackProfile":  "Full"
+                     },
+                     {
+                         "createdAt":  "2026-07-06T18:19:10.4898082-03:00",
+                         "folderName":  "iplan-prev-2142",
+                         "clientSlug":  "iplan",
+                         "initiativeId":  "PREV-2142",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\iplan-prev-2142",
+                         "gitInitialized":  true,
+                         "stackProfile":  "Full"
+                     },
+                     {
+                         "createdAt":  "2026-07-13T10:56:18.6968347-03:00",
+                         "folderName":  "gire-prev-1574",
+                         "clientSlug":  "gire",
+                         "initiativeId":  "PREV-1574",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\gire-prev-1574",
+                         "gitInitialized":  true,
+                         "stackProfile":  "Full"
+                     },
+                     {
+                         "createdAt":  "2026-08-07T21:38:35.9087790-03:00",
+                         "folderName":  "ingenia-aac01",
+                         "clientSlug":  "ingenia",
+                         "initiativeId":  "AAC01",
+                         "absolutePath":  "C:\\Users\\Principal\\Documents\\projects\\pkm\\CD\\001 - 📥 CAPTURA\\prueba-gentle-ai\\ingenia-hub-ia\\projects\\ingenia-aac01",
+                         "gitInitialized":  true,
+                         "stackProfile":  "Full"
+                     }
+                 ]
+}
+

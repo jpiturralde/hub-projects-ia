@@ -1,0 +1,13 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="placeholder" name="ArchiMate-views">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" value="Vistas complementarias — no es fuente de verdad (ver reglas Archi)" style="text;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="400" height="40" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

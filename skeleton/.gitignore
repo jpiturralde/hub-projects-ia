@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Thumbnails
+Thumbs.db
+ehthumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Node (si aplica en el futuro)
+node_modules/
+
+# Logs
+*.log
+
+# Draw.io backups y temporales
+*.drawio.bkp
+.*.drawio.bkp
+*.drawio.dtmp
+.*.drawio.dtmp
+
+# IDE / agente (p. ej. Cursor): metadatos locales del editor
+.cursor/projects/
+
+# MCP local (rutas por máquina; versionar mcp.json.example)
+.cursor/mcp.json

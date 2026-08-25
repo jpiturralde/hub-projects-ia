@@ -1,0 +1,88 @@
+---
+description: Workflow for drafts in docs/draft/ — compose and regenerate accompaniment .docx
+globs: docs/draft/**
+alwaysApply: true
+---
+# Draft workflow — accompaniment document
+
+> **Sibling rule**: `.cursor/rules/client-deliverables.mdc` (content restrictions).
+> This rule covers **composition**; the other covers **what cannot appear**.
+> Align both if you change either.
+
+## Source vs artifact
+
+- `.md` files in this folder are **editable sources** for the accompaniment document.
+- `*-draft.docx` is a **generated artifact** from Pandoc; do not hand-edit — change the `.md` and regenerate.
+- The `- draft` suffix on `.docx` is intentional: the final client deliverable usually gets manual polish in Google Docs on top of the corporate template.
+
+## Hierarchical numbering
+
+The final `.docx` combines several `.md` files — numbering must be continuous:
+
+- Main `.md`: sections 1–4 (`# 1. Motivo`, `# 2. Etapa`, `# 3. Detalle`,
+  `# 4. Anexos técnicos`).
+- Annex A: `# 5. Anexo A — …` with `## 5.1`, `## 5.2`…
+- Annex B: `# 6. Anexo B — …` with `## 6.1`, `## 6.2`…
+- Annex C: `# 7. Anexo C — …` with `## 7.1`, `## 7.2`…
+
+When adding annex D → section 8, etc., and update cross-references in the main `.md`.
+
+## Hard gate before regenerating `.docx`
+
+**Required:** run the internal-reference linter on source `.md` files and get **empty** output. Fix any hits and repeat.
+
+```bash
+cd "docs/draft" && grep -niE \
+  "docs/|\.cursor|backlog/|architecture-gaps-and-questions|ARCHITECTURE\.md|SPEC\.md|archimate-{{CLIENT_SLUG}}|archi-server|transcripts/|transcripci|\.mdc|\btask-[0-9]|\bCursor\b" \
+  *.md
+```
+
+Also do a **semantic review** (not grep-able):
+
+- Internal-only consulting meetings without the client cited by name/context? Reword.
+- Ambiguous phrases like “official list” without saying **client-provided**? Clarify.
+- Meeting dates without making clear they are **with the client**? Add context.
+
+Only regenerate after both pass.
+
+## Prerequisite (one-time)
+
+Install Pandoc for your OS (e.g. `brew install pandoc` on macOS, package managers on Linux, installer on Windows).
+
+Copy the corporate template (`{{CORPORATE_DOCX_TEMPLATE_NAME}}`) into `docs/templates/`
+from {{CONSULTANCY_NAME}}’s template repo or corporate storage.
+
+## Canonical Pandoc command
+
+```bash
+cd "docs/draft" && pandoc \
+  "{{DOC_TITLE_PREFIX}} - [Nombre-Entregable].md" \
+  "{{DOC_TITLE_PREFIX}} - [Nombre-Entregable] - Notas [Tema-A].md" \
+  -o "{{DOC_TITLE_PREFIX}} - [Nombre-Entregable] - draft.docx" \
+  --reference-doc="../../templates/{{CORPORATE_DOCX_TEMPLATE_NAME}}" \
+  --lua-filter="remove-bookmarks.lua"
+```
+
+> Replace `[Nombre-Entregable]` and `[Tema-A]` with real names.
+> Pandoc concatenates `.md` in **command order** for section order.
+
+`--lua-filter=remove-bookmarks.lua` avoids Google Docs showing one “bookmark” chip per heading.
+
+## Adding a new annex
+
+1. Create `{{DOC_TITLE_PREFIX}} - [Nombre-Entregable] - Notas [Tema-N].md` in this folder.
+2. Give the `# H1` the next number (e.g. `# 8. Anexo D — …`), subsections `## 8.1`, etc.
+3. Reference the annex from section 4 of the main `.md`.
+4. Append it to the Pandoc command in numeric order.
+5. Pass hard gate and regenerate `.docx`.
+6. Update the “Current files” table in `docs/deliverables/README.md`.
+
+## Manual steps after regenerating draft
+
+1. Open a Google Docs copy of the corporate template; rename with deliverable + version (e.g. "{{CLIENT_DISPLAY_NAME}} — {{INITIATIVE_DISPLAY_NAME}} —
+   [Nombre-Entregable] — v1.0").
+2. Fill cover (title/subtitle) by hand.
+3. Open this folder’s `.docx` in Google Docs, select from "1. Motivo del trabajo" to the end, copy.
+4. Paste into the template between the TOC and **Historial de Versiones**.
+5. Update TOC (Update table of contents).
+6. Add a row to **Historial de Versiones**.

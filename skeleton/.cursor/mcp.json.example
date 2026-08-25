@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@drawio/mcp"]
+    },
+    "backlog": {
+      "command": "backlog",
+      "args": ["mcp", "start", "--cwd", "C:\\ABSOLUTE\\PATH\\TO\\THIS\\REPO"]
+    },
+    "archi": {
+      "command": "node",
+      "args": ["C:\\ABSOLUTE\\PATH\\TO\\archi-mcp\\dist\\index.js"]
+    }
+  }
+}

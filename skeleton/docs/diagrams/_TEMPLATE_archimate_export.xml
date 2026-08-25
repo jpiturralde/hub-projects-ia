@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Placeholder: exportar desde Archi (File → Export → Open Exchange XML) y reemplazar este archivo. -->
+<model xmlns="http://www.archimatetool.com/archimate" name="{{DOC_TITLE_PREFIX}}">
+  <folder name="Business" id="business" type="business"/>
+</model>

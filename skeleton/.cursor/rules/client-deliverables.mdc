@@ -1,0 +1,71 @@
+---
+description: Client-facing deliverables folder is non-canonical; content must not reference this internal repository or internal paths
+globs: docs/deliverables/**, docs/draft/**
+alwaysApply: true
+---
+# Client deliverables
+
+Files under `docs/deliverables/` and `docs/draft/` are presentation material that **leaves the repo for the client**. The client does not know this internal repository or its folder layout.
+
+Full context: `docs/deliverables/README.md` (promoted deliverables) and `docs/draft/README.md` (drafts in progress).
+
+> **Sibling rule**: `.cursor/rules/deliverable-draft-workflow.mdc`
+> (how to compose and regenerate the Pandoc `.docx` draft under `docs/draft/`).
+> This rule covers **what must not appear** in client-facing content; the other covers **composition process**. Keep them aligned if you change either.
+
+## Principle
+
+These folders are **not canonical.** Any new or confirmed information here must be **ported first** to the appropriate canonical file
+(Archi model, `ARCHITECTURE.md`, `docs/architecture-gaps-and-questions.md`, etc.).
+The deliverable reflects what is already backed up, not the other way around.
+
+## Canonical sources by information type
+
+| Information | Canonical file |
+|-------------|------------------|
+| AS-IS model (actors, apps, APIs, nodes, relations) | Archi + `docs/diagrams/{{ARCHIMATE_EXPORT_FILENAME}}` |
+| Narrative architecture | `ARCHITECTURE.md` |
+| Technical C4 diagrams | `docs/diagrams/drawio/*.drawio`, `docs/diagrams/puml/*.puml` (derived from Archi or `ARCHITECTURE.md`) |
+| Implementation / publication flows | `docs/diagrams/puml/flow-*.puml` (+ Draw.io under `drawio/` when present) |
+| Gaps, open questions, meeting confirmations | `docs/architecture-gaps-and-questions.md` |
+| Scope and objectives ({{INITIATIVE_ID}}) | `SPEC.md` |
+| Operational backlog | `backlog.md` + `backlog/tasks/` |
+| Minutes and action items | `backlog/meetings/AAAA-MM-DD-*.md` |
+| Raw immutable transcripts | `transcripts/` (see `transcripts-immutable.mdc`) |
+| Client-provided documentation | `docs/client-documentation/` |
+
+## Critical rule · No internal project references
+
+When editing anything under `docs/deliverables/` or `docs/draft/` (diagrams,
+`.md` annexes, PPTs, PDFs, future docs):
+
+**Forbidden:**
+- Internal repo paths: `docs/…`, `docs/client-documentation/…`,
+  `.cursor/…`, `docs/diagrams/…`, `backlog/…`, `transcripts/…`,
+  or any path that exposes this repository layout.
+- Internal working filenames: `architecture-gaps-and-questions.md`,
+  `ARCHITECTURE.md`, `SPEC.md`, `backlog.md`, `{{ARCHIMATE_EXPORT_FILENAME}}`,
+  `archi-server MCP`, etc.
+- Mentions of this internal repository by vendor or tool name, rules (`.cursor/rules/…`), internal-only meetings,
+  internal methodology decisions.
+
+**Allowed when citing client material:**
+- The **relative path inside documentation the client gave you**,
+  starting from the folder/space name **as the client uses it**.
+- The **file or image name alone**, when enough.
+- The **Confluence space or logical folder name** as the client knows it.
+
+**Never prefix with** `docs/client-documentation/…` **or any internal repo path.**
+
+## How to proceed
+
+1. Before changing a file in `docs/deliverables/` or `docs/draft/`, confirm the information already exists in a canonical file. If not, port it there first.
+2. When citing client material, use the path **as the client names it** (never our internal repo path).
+3. When citing internal consulting-only material: do not cite it. Use neutral wording backed by the client or a placeholder like "⚠ Revisar este punto".
+4. If unsure whether a reference is internal-only, ask the user before writing.
+
+## Related doc
+
+See [`docs/deliverables/README.md`](../../docs/deliverables/README.md)
+for the recommended workflow (prep before meetings, capture during/after,
+port to canonical sources before iterating) and the current deliverable list.

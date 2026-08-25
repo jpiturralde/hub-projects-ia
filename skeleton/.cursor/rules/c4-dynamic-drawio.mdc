@@ -1,0 +1,134 @@
+---
+description: Convención para generar diagramas C4 dinámicos y de flujo en Draw.io via MCP a partir de archivos .puml
+globs: docs/diagrams/puml/flow-*.puml,docs/diagrams/puml/c4-dynamic*.puml
+alwaysApply: false
+---
+
+# C4 Dynamic / Flujos → Draw.io (MCP)
+
+Convención para convertir diagramas C4 Dynamic o flujos (PlantUML) a Draw.io XML interactivo usando el MCP `drawio` (`open_drawio_xml`).
+
+Los flujos suelen vivir como activity/swimlanes en `docs/diagrams/puml/flow-*.puml` (swimlanes por actor/rol y por componente aplicativo).
+
+## Layout: izquierda → derecha por cercanía al usuario
+
+```
+[Usuario]  →  [Frontend]  →  [API GW]  →  [Backend]  →  [Legacy]
+                                        ↓
+                                 [Pipelines / plataforma]
+```
+
+- **Izquierda**: Actor/persona (más cercano al usuario final).
+- **Centro**: Frontends, BFFs, gateways, load balancers.
+- **Derecha**: Backends y sistemas legacy.
+- **Abajo**: Pipelines CI/CD, identidad, service mesh, observabilidad.
+
+### Posicionamiento
+
+- Fila principal: `y ≈ 140`, separación horizontal `≈ 220px` entre nodos.
+- Fila secundaria (infra auxiliar): `y ≈ 340`.
+- Servicios externos/observabilidad: `y ≈ 340+` apilados a la derecha.
+
+## Estilos C4 (colores y shapes)
+
+| Tipo | Style draw.io | fillColor | Notas |
+|------|--------------|-----------|-------|
+| **Persona** | `shape=mxgraph.c4.person2` | `#08427B` | `fontColor=#ffffff;strokeColor=none` |
+| **Container** | `rounded=1;arcSize=10` | `#438DD5` | `fontColor=#ffffff;strokeColor=none` |
+| **Sistema externo** | `rounded=1;arcSize=10` | `#999999` | `fontColor=#ffffff;strokeColor=none` |
+| **Database** | `shape=cylinder3;size=12` | `#438DD5` | `fontColor=#ffffff;strokeColor=none` |
+
+### Labels HTML (en `value`)
+
+```
+<b>Nombre</b><br><font style="font-size:10px">[Tipo]<br>Tecnología<br>Detalle</font>
+```
+
+Escapar en XML: `<` → `&lt;`, `>` → `&gt;`, `"` dentro de value → `&amp;quot;`.
+
+## Flechas (edges)
+
+| Tipo | Estilo | Color |
+|------|--------|-------|
+| **Forward** (flujo normal) | `edgeStyle=orthogonalEdgeStyle;rounded=1` | por defecto (negro) |
+| **Retorno** (respuesta) | igual + `strokeColor=#CC4444` | rojo |
+| **Ruteo** (proxy/WAF) | igual + `dashed=1` | por defecto |
+| **Sub-flujo A** | igual + `strokeColor=#1565C0` | azul oscuro |
+| **Sub-flujo B** | igual + `strokeColor=#2E7D32` | verde |
+| **Sub-flujo C** | igual + `strokeColor=#E65100` | naranja |
+| **Sub-flujo D** | igual + `strokeColor=#6A1B9A` | violeta |
+
+### Labels de pasos
+
+- Formato: `"N. Descripción breve"`.
+- Con sub-flujos: `"A1. Descripción"`, `"B1. Descripción"`.
+- Siempre incluir `labelBackgroundColor=#ffffff` y `fontSize=9`.
+- Consolidar round-trips repetitivos en un solo edge.
+
+### Routing de edges
+
+- **Forward** (→ derecha): usar mitad superior del nodo (`exitY=0.35`, `entryY=0.35`).
+- **Return** (← izquierda): usar mitad inferior (`exitY=0.7`, `entryY=0.65`) o rutear por arriba (`y=70-90`) con waypoints.
+- **Vertical** (↓ a DB/infra): `exitX=0.5;exitY=1` → `entryX=0.5;entryY=0`.
+- Spread exit/entry points cuando hay múltiples edges en el mismo lado.
+
+## Estructura del XML
+
+```xml
+<mxGraphModel><root>
+  <mxCell id="0"/>
+  <mxCell id="1" parent="0"/>
+  <!-- 1. Título -->
+  <!-- 2. Nodos (izquierda → derecha) -->
+  <!-- 3. Edges (numerados) -->
+  <!-- 4. Notas ⚠ (shape=note, fillColor=#FFE0E0) -->
+  <!-- 5. Leyenda (text cell, abajo-izquierda) -->
+</root></mxGraphModel>
+```
+
+### IDs
+
+- Nodos: ids cortos descriptivos.
+- Edges: `e1`, `e2`, `e2b`, ... o con prefijo sub-flujo: `ea1`, `eb1`.
+- Título: `t`. Leyenda: `leg`. Notas: `note`, `note1`, etc.
+
+## Notas de hipótesis
+
+Usar shape `note` con estilo de advertencia cuando la fuente PlantUML tiene `⚠`:
+
+```
+fillColor=#FFE0E0;strokeColor=#CC4444;fontColor=#CC4444;fontSize=9;align=left;size=14
+```
+
+## Leyenda
+
+Siempre incluir una leyenda abajo-izquierda con:
+- Colores de sub-flujos (si aplica).
+- `→ forward`, `→ retorno` (rojo), `→ ruteo` (dashed).
+- Cuadrados de color: Persona, Container, Externo.
+
+## Estructura de archivos
+
+```
+docs/diagrams/
+├── deliverables/                    # Working copy cliente (no canónico)
+├── puml/                          # Diagramas PlantUML
+│   ├── c4-lib/                    # Librería C4-PlantUML vendorizada (opcional)
+│   └── flow-*.puml
+├── drawio/                        # Diagramas Draw.io — derivados via MCP
+├── {{ARCHIMATE_EXPORT_FILENAME}}  # Export ArchiMate (fuente canónica vía Archi)
+└── README.md
+```
+
+- Los `.puml` fuente viven en `docs/diagrams/puml/`.
+- VS Code u otro IDE compatible: configurar `plantuml.includePaths` si aplica al layout del repo (p. ej. Cursor).
+
+## Workflow
+
+1. **Leer** el `.puml` fuente en `docs/diagrams/puml/` para extraer participantes, relaciones y notas.
+2. **Mapear** participantes a nodos con estilos C4.
+3. **Posicionar** izquierda → derecha según cercanía al usuario.
+4. **Generar** edges numerados; consolidar round-trips si hay muchos.
+5. **Agregar** notas ⚠ y leyenda.
+6. **Llamar** `open_drawio_xml` del MCP `drawio` con el XML completo.
+7. **Guardar** el `.drawio` resultante en `docs/diagrams/drawio/` con nombre espejo al `.puml`.

@@ -1,0 +1,33 @@
+{
+  "file_analyses": [
+    {
+      "relative_path": "",
+      "doc_type": "source_code",
+      "module_description": "",
+      "technologies": [
+        {
+          "name": "",
+          "version": "desconocida",
+          "evidence": { "line_number": 1, "line_text": "" }
+        }
+      ],
+      "internal_dependencies": [],
+      "external_systems": [
+        {
+          "type": "service",
+          "name": "",
+          "details": "",
+          "derivation": "",
+          "evidence": "",
+          "line_number": 1
+        }
+      ]
+    }
+  ],
+  "repository_summary": {
+    "description": "",
+    "technologies": [],
+    "internal_dependencies": [],
+    "external_systems": []
+  }
+}

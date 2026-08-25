@@ -1,0 +1,41 @@
+---
+description: Router del workspace ingenia-hub-ia — generador de proyectos, no un encargo de consultoría.
+alwaysApply: false
+---
+
+# Ingenia Hub — workspace raíz
+
+Este repositorio es el **hub generador y evolución del template** Consulting Copilot. **No** es un encargo de cliente.
+
+## Dos modos de trabajo
+
+| Modo | Workspace raíz | Qué hacer |
+|------|----------------|-----------|
+| **Hub** | `ingenia-hub-ia/` (esta carpeta) | Crear proyectos, mantener `skeleton/` y `overlays/` |
+| **Encargo** | `projects/<nombre>/` | Bootstrap, SPEC, entregables, CDD/SDD |
+
+Si el usuario trabaja en documentación de cliente, diagramas ArchiMate o entregables, **pedir que abra el proyecto hijo** como workspace raíz.
+
+## Crear un proyecto nuevo
+
+1. Skill **`create-ingenia-project`** — flujo conversacional recomendado.
+2. Script canónico: `scripts/New-HubProject.ps1` (wrapper sobre `New-ConsultingCopilotProject.ps1`).
+
+Los hijos se generan en `projects/` (gitignored en el padre). Cada hijo recibe su propio `git init`.
+
+## Qué NO aplicar en la raíz del hub
+
+- Reglas de entregables al cliente (`client-deliverables`, CDD, transcripts de encargo).
+- Bootstrap de SPEC/ARCHITECTURE de un cliente concreto.
+- Edición de material bajo `projects/` como si fuera el encargo activo (salvo mantenimiento del generador).
+
+## Mantenimiento del template
+
+Mejoras al molde van en `skeleton/`, `skeleton-minimal/` y `overlays/` **en este repo**. No hay sync automático a hijos ya generados.
+
+## Referencias
+
+- [`README.md`](../../README.md) — visión del hub
+- [`HUB-WORKFLOW.md`](../../HUB-WORKFLOW.md) — checklist operativo
+- [`hub-registry.json`](../../hub-registry.json) — catálogo local de proyectos generados
+- [`docs/STACK-PROFILES.md`](../../docs/STACK-PROFILES.md) — perfiles GentleAi / Consulting / Full
