@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "name": "hub-projects-ia",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "git.openRepositoryInParentFolders": "never"
+  }
+}
