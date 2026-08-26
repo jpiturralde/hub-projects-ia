@@ -66,11 +66,19 @@ Sólo `consulting-copilot.mdc` y `context-budget.mdc` son always-on. Las reglas 
 
 ## Diagnóstico de proyectos existentes
 
+Tras generar un hijo, validación unificada por perfil:
+
+```powershell
+.\Test-HubProject.ps1 -TargetPath "..\projects\mi-proyecto" -ExpectedProfile ConsultingAI
+```
+
+Para sólo Gentle AI / Engram (duplicación global-workspace, MCP local, colisiones de skills):
+
 ```powershell
 .\Test-GentleAiProject.ps1 -TargetPath "D:\clientes\iplan"
 ```
 
-Es read-only. Informa duplicación global/workspace, MCP Engram local, skills que sombrean globales y reglas always-on excesivas. No migra automáticamente.
+Ambos son read-only. `Test-HubProject.ps1` delega en `Test-GentleAiProject.ps1` salvo con `-SkipGentleAiCheck`. No migran automáticamente.
 
 Guía: [docs/MIGRATION-GENTLE-AI.md](docs/MIGRATION-GENTLE-AI.md). Resumen de esta actualización: [docs/CHANGES-2026-08-25.md](docs/CHANGES-2026-08-25.md).
 

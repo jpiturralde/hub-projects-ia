@@ -24,11 +24,14 @@ if (-not (Test-Path -LiteralPath $TargetPath -PathType Container)) { throw "Proy
 $environment = Get-GentleAiEnvironment -TargetPath $TargetPath
 $localSkillsRoot = Join-Path $TargetPath '.cursor\skills'
 $globalSkillsRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.cursor\skills'
+$skillCollisionExclude = @('_shared')
 $collisions = @()
 if ((Test-Path -LiteralPath $localSkillsRoot) -and (Test-Path -LiteralPath $globalSkillsRoot)) {
   $localNames = @(Get-ChildItem -LiteralPath $localSkillsRoot -Directory -Force | ForEach-Object { $_.Name })
   $globalNames = @(Get-ChildItem -LiteralPath $globalSkillsRoot -Directory -Force | ForEach-Object { $_.Name })
-  $collisions = @($localNames | Where-Object { $globalNames -contains $_ } | Sort-Object -Unique)
+  $collisions = @($localNames | Where-Object {
+    $_ -notin $skillCollisionExclude -and ($globalNames -contains $_)
+  } | Sort-Object -Unique)
 }
 
 $alwaysApply = @()

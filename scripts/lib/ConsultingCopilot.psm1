@@ -569,10 +569,14 @@ function Copy-ProjectOnboardingLayer {
   param([string] $SourceRoot, [string] $TargetPath)
   $ruleSrc = Join-Path $SourceRoot 'skeleton\.cursor\rules\onboarding.mdc'
   $skillSrc = Join-Path $SourceRoot 'skeleton\.cursor\skills\onboarding'
-  $ruleDestDir = Join-Path $TargetPath '.cursor\rules'; $skillsDest = Join-Path $TargetPath '.cursor\skills'
+  $ruleDestDir = Join-Path $TargetPath '.cursor\rules'
+  $skillDestDir = Join-Path $TargetPath '.cursor\skills\onboarding'
   if (-not (Test-Path -LiteralPath $ruleDestDir)) { New-Item -ItemType Directory -Path $ruleDestDir -Force | Out-Null }
   if (Test-Path -LiteralPath $ruleSrc) { Copy-Item -LiteralPath $ruleSrc -Destination $ruleDestDir -Force }
-  if (Test-Path -LiteralPath $skillSrc) { Copy-Item -LiteralPath $skillSrc -Destination $skillsDest -Recurse -Force }
+  if (Test-Path -LiteralPath $skillSrc) {
+    if (-not (Test-Path -LiteralPath $skillDestDir)) { New-Item -ItemType Directory -Path $skillDestDir -Force | Out-Null }
+    Copy-Item -LiteralPath (Join-Path $skillSrc '*') -Destination $skillDestDir -Recurse -Force
+  }
 }
 
 function Invoke-OpenCursorWorkspace {
