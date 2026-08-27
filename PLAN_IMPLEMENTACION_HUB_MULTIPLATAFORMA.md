@@ -367,17 +367,17 @@ Objetivo: aislar diferencias Windows/Linux/WSL.
 
 Tareas:
 
-- [ ] Implementar detección de Windows, Linux y WSL.
-- [ ] Resolver rutas por segmentos con `Join-Path` y APIs de `System.IO.Path`.
-- [ ] Eliminar fragmentos como `lib\\ConsultingCopilot.psm1` o `.cursor\\skills`.
-- [ ] Comparar rutas con sensibilidad a mayúsculas adecuada para cada plataforma.
-- [ ] Resolver dinámicamente la raíz del hub.
-- [ ] Validar comandos externos y su procedencia.
-- [ ] En Ubuntu, rechazar Git, Node, Go, Gentle AI y Engram provenientes de `/mnt/c` o terminados en `.exe`.
-- [ ] Permitir explícitamente el launcher Windows de Cursor desde WSL.
-- [ ] Advertir cuando un proyecto activo permanece bajo `/mnt/c`.
-- [ ] Validar rutas MCP reales y eliminar defaults Windows inválidos.
-- [ ] Exigir una ruta existente para Archi MCP si el perfil la requiere.
+- [x] Implementar detección de Windows, Linux y WSL.
+- [x] Resolver rutas por segmentos con `Join-Path` y APIs de `System.IO.Path`.
+- [x] Eliminar fragmentos como `lib\\ConsultingCopilot.psm1` o `.cursor\\skills`.
+- [x] Comparar rutas con sensibilidad a mayúsculas adecuada para cada plataforma.
+- [x] Resolver dinámicamente la raíz del hub.
+- [x] Validar comandos externos y su procedencia.
+- [x] En Ubuntu, rechazar Git, Node, Go, Gentle AI y Engram provenientes de `/mnt/c` o terminados en `.exe`.
+- [x] Permitir explícitamente el launcher Windows de Cursor desde WSL.
+- [x] Advertir cuando un proyecto activo permanece bajo `/mnt/c`.
+- [x] Validar rutas MCP reales y eliminar defaults Windows inválidos.
+- [x] Exigir una ruta existente para Archi MCP si el perfil la requiere.
 
 Criterios de salida:
 

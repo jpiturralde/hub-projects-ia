@@ -46,14 +46,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$modulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'Platform.psm1') -Force
+$modulePath = Resolve-HubModulePath -ScriptRoot $PSScriptRoot -ModuleName 'ConsultingCopilot'
 Import-Module $modulePath -Force
 
 $templateRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
-$skeletonPath = Join-Path $templateRoot 'skeleton'
-$skeletonMinimalPath = Join-Path $templateRoot 'skeleton-minimal'
-$overlayConsultingPath = Join-Path $templateRoot 'overlays\consulting'
-$overlayFullPath = Join-Path $templateRoot 'overlays\full'
+$skeletonPath = Join-HubPath $templateRoot 'skeleton'
+$skeletonMinimalPath = Join-HubPath $templateRoot 'skeleton-minimal'
+$overlayConsultingPath = Join-HubPath $templateRoot 'overlays' 'consulting'
+$overlayFullPath = Join-HubPath $templateRoot 'overlays' 'full'
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
   $TargetPath = Read-ConsultingPrompt 'Ruta absoluta de la carpeta destino (nuevo proyecto)'
@@ -121,6 +122,7 @@ if (-not [string]::IsNullOrWhiteSpace($EngramPath)) {
 }
 
 $finalTargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force
+Write-HubPathLocationWarnings -TargetPath $finalTargetPath
 $stagingPath = New-ConsultingProjectStagingPath
 $TargetPath = $stagingPath
 
@@ -159,8 +161,13 @@ if (-not $PSBoundParameters.ContainsKey('IncludeArchiMcp')) {
   $IncludeArchiMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Archi?' $false
 }
 if ($IncludeArchiMcp -and ($null -eq $ArchiMcpArgs -or $ArchiMcpArgs.Count -eq 0)) {
-  $archiPath = Read-ConsultingPrompt 'Ruta absoluta al index.js de archi-mcp' 'C:\ruta\archi-mcp\dist\index.js'
-  $ArchiMcpArgs = @($archiPath)
+  $archiPath = Read-ConsultingPrompt 'Ruta absoluta al index.js de archi-mcp'
+  if ([string]::IsNullOrWhiteSpace($archiPath)) {
+    throw 'IncludeArchiMcp requiere una ruta absoluta existente al index.js de archi-mcp.'
+  }
+  $ArchiMcpArgs = @(Test-HubArchiMcpPath -Path $archiPath)
+} elseif ($IncludeArchiMcp) {
+  $ArchiMcpArgs = @((Test-HubArchiMcpPath -Path $ArchiMcpArgs[0]))
 }
 if (-not $PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) {
   $IncludeClaudeCoworkLayer = Read-ConsultingPromptYesNo '¿Incluir capa opcional Claude/Cowork?' $false
@@ -186,6 +193,9 @@ if (-not $IncludeClaudeCoworkLayer) { Remove-ConsultingClaudeLayer -TargetPath $
 
 $mcp = Get-ConsultingMcpServers `
   -IncludeDrawioMcp $IncludeDrawioMcp `
+  -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -BacklogMcpCwd $BacklogMcpCwd `
+  -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs
+Test-HubMcpConfigurationPaths `
   -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -BacklogMcpCwd $BacklogMcpCwd `
   -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs
 Write-ConsultingMcpJson -TargetPath $TargetPath -McpServers $mcp

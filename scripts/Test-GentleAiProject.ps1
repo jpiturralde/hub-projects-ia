@@ -16,7 +16,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-Import-Module (Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1') -Force
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1') -Force
 
 $result = Get-GentleAiProjectDiagnostic -TargetPath $TargetPath
 

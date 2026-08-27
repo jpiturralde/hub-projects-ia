@@ -28,7 +28,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$modulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
+$modulePath = Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1'
 Import-Module $modulePath -Force
 
 $result = Get-HubProjectDiagnostic `

@@ -1,5 +1,7 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 Set-StrictMode -Version Latest
+
+Import-Module (Join-Path $PSScriptRoot 'Platform.psm1') -Force
 
 $script:TextExtensions = @(
   '.md', '.mdc', '.json', '.lua', '.yml', '.yaml', '.xml', '.drawio', '.gitignore', '.ps1', '.puml', '.mdx'
@@ -171,15 +173,8 @@ function Remove-ConsultingClaudeLayer {
 }
 
 function Get-CommandExecutablePaths {
-  param([string] $Name)
-  $paths = @()
-  Get-Command $Name -All -ErrorAction SilentlyContinue | ForEach-Object {
-    $candidate = if ($_.Path) { $_.Path } elseif ($_.Source) { $_.Source } else { $null }
-    if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-      $paths += [System.IO.Path]::GetFullPath($candidate)
-    }
-  }
-  return @($paths | Sort-Object -Unique)
+  param([string] $Name, [switch] $AllowWindowsExecutable)
+  return Get-HubCommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable
 }
 
 function Test-McpServerConfigured {
@@ -210,20 +205,20 @@ function Get-HubProjectsIaRoot {
   if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
     throw 'ScriptRoot es obligatorio cuando HUB_PROJECTS_IA_ROOT no está definido.'
   }
-  return (Resolve-Path (Join-Path $ScriptRoot '..')).Path
+  return Resolve-HubProjectsRootFromScript -ScriptRoot $ScriptRoot
 }
 
 function Get-GentleAiEnvironment {
   param([string] $TargetPath, [string] $UserHome)
   $UserHome = Get-ConsultingUserHome -UserHome $UserHome
   $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  $globalRule = Join-Path $UserHome '.cursor\rules\gentle-ai.mdc'
-  $globalState = Join-Path $UserHome '.gentle-ai\state.json'
-  $globalMcp = Join-Path $UserHome '.cursor\mcp.json'
+  $globalRule = Join-HubPath $UserHome '.cursor' 'rules' 'gentle-ai.mdc'
+  $globalState = Join-HubPath $UserHome '.gentle-ai' 'state.json'
+  $globalMcp = Join-HubPath $UserHome '.cursor' 'mcp.json'
   $globalMarkers = @(
     $globalRule,
-    (Join-Path $UserHome '.cursor\agents\sdd-init.md'),
-    (Join-Path $UserHome '.cursor\skills\sdd-init\SKILL.md')
+    (Join-HubPath $UserHome '.cursor' 'agents' 'sdd-init.md'),
+    (Join-HubPath $UserHome '.cursor' 'skills' 'sdd-init' 'SKILL.md')
   )
   $stateMentionsCursor = $false
   if (Test-Path -LiteralPath $globalState -PathType Leaf) {
@@ -234,11 +229,11 @@ function Get-GentleAiEnvironment {
   $workspaceMcp = $null
   if (-not [string]::IsNullOrWhiteSpace($TargetPath)) {
     $workspaceMarkers = @(
-      (Join-Path $TargetPath '.cursor\rules\gentle-ai.mdc'),
-      (Join-Path $TargetPath '.cursor\agents\sdd-init.md'),
-      (Join-Path $TargetPath '.cursor\skills\sdd-init\SKILL.md')
+      (Join-HubPath $TargetPath '.cursor' 'rules' 'gentle-ai.mdc'),
+      (Join-HubPath $TargetPath '.cursor' 'agents' 'sdd-init.md'),
+      (Join-HubPath $TargetPath '.cursor' 'skills' 'sdd-init' 'SKILL.md')
     )
-    $workspaceMcp = Join-Path $TargetPath '.cursor\mcp.json'
+    $workspaceMcp = Join-HubPath $TargetPath '.cursor' 'mcp.json'
   }
   $existingWorkspaceMarkers = @($workspaceMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
   $existingGlobalMarkers = @($globalMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
@@ -636,10 +631,10 @@ Si creaste este proyecto desde un **hub generador**, el trabajo del encargo (SPE
 
 function Copy-ProjectOnboardingLayer {
   param([string] $SourceRoot, [string] $TargetPath)
-  $ruleSrc = Join-Path $SourceRoot 'skeleton\.cursor\rules\onboarding.mdc'
-  $skillSrc = Join-Path $SourceRoot 'skeleton\.cursor\skills\onboarding'
-  $ruleDestDir = Join-Path $TargetPath '.cursor\rules'
-  $skillDestDir = Join-Path $TargetPath '.cursor\skills\onboarding'
+  $ruleSrc = Join-HubPath $SourceRoot 'skeleton' '.cursor' 'rules' 'onboarding.mdc'
+  $skillSrc = Join-HubPath $SourceRoot 'skeleton' '.cursor' 'skills' 'onboarding'
+  $ruleDestDir = Join-HubPath $TargetPath '.cursor' 'rules'
+  $skillDestDir = Join-HubPath $TargetPath '.cursor' 'skills' 'onboarding'
   if (-not (Test-Path -LiteralPath $ruleDestDir)) { New-Item -ItemType Directory -Path $ruleDestDir -Force | Out-Null }
   if (Test-Path -LiteralPath $ruleSrc) { Copy-Item -LiteralPath $ruleSrc -Destination $ruleDestDir -Force }
   if (Test-Path -LiteralPath $skillSrc) {
@@ -650,7 +645,7 @@ function Copy-ProjectOnboardingLayer {
 
 function Invoke-OpenCursorWorkspace {
   param([string] $TargetPath)
-  $paths = @(Get-CommandExecutablePaths -Name 'cursor')
+  $paths = @(Get-CommandExecutablePaths -Name 'cursor' -AllowWindowsExecutable)
   if ($paths.Count -ne 1) { Write-Warning "Abrí manualmente en Cursor: $TargetPath"; return $false }
   & $paths[0] $TargetPath
   return $LASTEXITCODE -eq 0
@@ -667,8 +662,7 @@ function Write-ProjectHandoffSummary {
 
 function Resolve-HubRootPath {
   param([Parameter(Mandatory = $true)][string] $Path)
-  if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Path vacío.' }
-  return [System.IO.Path]::GetFullPath($Path.Trim().TrimEnd('\', '/'))
+  Platform\Resolve-HubRootPath -Path $Path
 }
 
 function Test-HubPathIsChildOf {
@@ -676,20 +670,16 @@ function Test-HubPathIsChildOf {
     [Parameter(Mandatory = $true)][string] $ChildPath,
     [Parameter(Mandatory = $true)][string] $ParentPath
   )
-  $child = Resolve-HubRootPath $ChildPath
-  $parent = Resolve-HubRootPath $ParentPath
-  if ($child.Length -le $parent.Length) { return $false }
-  $sep = [System.IO.Path]::DirectorySeparatorChar
-  return $child.StartsWith($parent + $sep, [StringComparison]::OrdinalIgnoreCase)
+  Platform\Test-HubPathIsChildOf -ChildPath $ChildPath -ParentPath $ParentPath
 }
 
 function Test-HubRootLayout {
   param([Parameter(Mandatory = $true)][string] $HubRoot)
   $resolved = Resolve-HubRootPath $HubRoot
   $markers = @(
-    (Join-Path $resolved 'hub-registry.json'),
-    (Join-Path $resolved 'scripts\New-HubProject.ps1'),
-    (Join-Path $resolved 'skeleton')
+    (Join-HubPath $resolved 'hub-registry.json'),
+    (Join-HubPath $resolved 'scripts' 'New-HubProject.ps1'),
+    (Join-HubPath $resolved 'skeleton')
   )
   return @($markers | Where-Object { -not (Test-Path -LiteralPath $_) })
 }
@@ -858,7 +848,7 @@ function Update-HubChildMcpPaths {
   }
 
   foreach ($projectDir in @(Get-ChildItem -LiteralPath $projectsRoot -Directory -ErrorAction SilentlyContinue)) {
-    $mcpPath = Join-Path $projectDir.FullName '.cursor\mcp.json'
+    $mcpPath = Join-HubPath $projectDir.FullName '.cursor' 'mcp.json'
     if (-not (Test-Path -LiteralPath $mcpPath -PathType Leaf)) { continue }
 
     $raw = [System.IO.File]::ReadAllText($mcpPath, [System.Text.UTF8Encoding]::new($false))
@@ -923,7 +913,7 @@ function Test-HubMoveResult {
       $issues.Add("Proyecto registrado no encontrado ($($project.folderName)): $projectPath")
     }
 
-    $mcpPath = Join-Path $projectPath '.cursor\mcp.json'
+    $mcpPath = Join-HubPath $projectPath '.cursor' 'mcp.json'
     if (-not (Test-Path -LiteralPath $mcpPath)) { continue }
 
     try {
@@ -1081,8 +1071,8 @@ function Get-GentleAiProjectDiagnostic {
 
   $environment = Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
   $userHomeResolved = Get-ConsultingUserHome -UserHome $UserHome
-  $localSkillsRoot = Join-Path $TargetPath '.cursor\skills'
-  $globalSkillsRoot = Join-Path $userHomeResolved '.cursor\skills'
+  $localSkillsRoot = Join-HubPath $TargetPath '.cursor' 'skills'
+  $globalSkillsRoot = Join-HubPath $userHomeResolved '.cursor' 'skills'
   $skillCollisionExclude = @('_shared')
   $collisions = @()
   if ((Test-Path -LiteralPath $localSkillsRoot) -and (Test-Path -LiteralPath $globalSkillsRoot)) {
@@ -1094,7 +1084,7 @@ function Get-GentleAiProjectDiagnostic {
   }
 
   $alwaysApply = @()
-  $rulesRoot = Join-Path $TargetPath '.cursor\rules'
+  $rulesRoot = Join-HubPath $TargetPath '.cursor' 'rules'
   if (Test-Path -LiteralPath $rulesRoot) {
     Get-ChildItem -LiteralPath $rulesRoot -Filter '*.mdc' -File -Force | ForEach-Object {
       if ((Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8) -match '(?m)^alwaysApply:\s*true\s*$') {
@@ -1201,7 +1191,7 @@ function Test-HubCommonStructureChecks {
   }
 
   foreach ($pair in @(
-    @{ Path = (Join-Path $Root 'docs\GETTING-STARTED.md'); Label = 'getting-started' }
+    @{ Path = (Join-HubPath $Root 'docs' 'GETTING-STARTED.md'); Label = 'getting-started' }
     @{ Path = (Join-Path $Root 'PROJECT-CONTEXT.md'); Label = 'project-context' }
   )) {
     $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
@@ -1217,18 +1207,18 @@ function Test-HubConsultingBaseStructureChecks {
     [object] $EngagementMeta
   )
   $issues = @()
-  $mcpPath = Join-Path $Root '.cursor\mcp.json'
+  $mcpPath = Join-HubPath $Root '.cursor' 'mcp.json'
 
   foreach ($pair in @(
-    @{ Path = (Join-Path $Root '.cursor\rules\consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
-    @{ Path = (Join-Path $Root '.atl\stack-profile.json'); Label = 'stack-profile-config' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
+    @{ Path = (Join-HubPath $Root '.atl' 'stack-profile.json'); Label = 'stack-profile-config' }
     @{ Path = $mcpPath; Label = 'mcp-json' }
   )) {
     $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
     if ($issue) { $issues += $issue }
   }
 
-  $issue = Test-HubDiagnosticPathAbsent -Path (Join-Path $Root '.cursor\rules\gentle-ai.mdc') -Label 'gentle-ai-rule'
+  $issue = Test-HubDiagnosticPathAbsent -Path (Join-HubPath $Root '.cursor' 'rules' 'gentle-ai.mdc') -Label 'gentle-ai-rule'
   if ($issue) { $issues += $issue }
 
   $servers = Get-HubMcpServerNames -McpJsonPath $mcpPath
@@ -1247,7 +1237,7 @@ function Test-HubConsultingStructureChecks {
   )
   $issues = Test-HubConsultingBaseStructureChecks -Root $Root -EngagementMeta $EngagementMeta
   if ($EngagementMeta.stackProfile -ne 'consulting-only') { $issues += 'wrong-stack-profile' }
-  $issue = Test-HubDiagnosticPathAbsent -Path (Join-Path $Root '.cursor\agents\cdd-explore.md') -Label 'cdd-overlay'
+  $issue = Test-HubDiagnosticPathAbsent -Path (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md') -Label 'cdd-overlay'
   if ($issue) { $issues += $issue }
   return $issues
 }
@@ -1261,9 +1251,9 @@ function Test-HubConsultingAiStructureChecks {
   if ($EngagementMeta.stackProfile -ne 'consulting-ai') { $issues += 'wrong-stack-profile' }
 
   foreach ($pair in @(
-    @{ Path = (Join-Path $Root '.cursor\agents\cdd-explore.md'); Label = 'cdd-explore-agent' }
-    @{ Path = (Join-Path $Root '.cursor\rules\gentle-ai-consulting.mdc'); Label = 'gentle-ai-consulting-rule' }
-    @{ Path = (Join-Path $Root '.cursor\skills\consulting-driven-delivery\SKILL.md'); Label = 'cdd-skill' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md'); Label = 'cdd-explore-agent' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'gentle-ai-consulting.mdc'); Label = 'gentle-ai-consulting-rule' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'skills' 'consulting-driven-delivery' 'SKILL.md'); Label = 'cdd-skill' }
   )) {
     $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
     if ($issue) { $issues += $issue }
@@ -1279,12 +1269,12 @@ function Test-HubGentleAiStructureChecks {
     [object] $ProjectMeta
   )
   $issues = @()
-  $mcpPath = Join-Path $Root '.cursor\mcp.json'
+  $mcpPath = Join-HubPath $Root '.cursor' 'mcp.json'
 
   if ($ProjectMeta.stackProfile -ne 'gentle-ai-only') { $issues += 'wrong-stack-profile' }
 
   foreach ($pair in @(
-    @{ Path = (Join-Path $Root '.cursor\skills\onboarding\SKILL.md'); Label = 'onboarding-skill' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'skills' 'onboarding' 'SKILL.md'); Label = 'onboarding-skill' }
     @{ Path = (Join-Path $Root 'README.md'); Label = 'readme' }
   )) {
     $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
@@ -1293,8 +1283,8 @@ function Test-HubGentleAiStructureChecks {
 
   foreach ($pair in @(
     @{ Path = (Join-Path $Root '.consulting-engagement.json'); Label = 'consulting-engagement' }
-    @{ Path = (Join-Path $Root '.cursor\rules\consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
-    @{ Path = (Join-Path $Root '.cursor\agents\cdd-explore.md'); Label = 'cdd-overlay' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md'); Label = 'cdd-overlay' }
   )) {
     $issue = Test-HubDiagnosticPathAbsent -Path $pair.Path -Label $pair.Label
     if ($issue) { $issues += $issue }
@@ -1554,9 +1544,43 @@ function Write-ConsultingCopilotPreflightDiagnostic {
   }
 
   Write-Host 'Crear proyecto:' -ForegroundColor Cyan
-  Write-Host '  .\New-ConsultingCopilotProject.ps1 -TargetPath "D:\ruta\proyecto" -StackProfile ConsultingAI'
+  Write-Host '  pwsh -File ./scripts/New-ConsultingCopilotProject.ps1 -TargetPath "/ruta/absoluta/proyecto" -StackProfile ConsultingAI'
   Write-Host ''
   Write-Host 'El generador resuelve Gentle AI antes de crear archivos y no corrige instalaciones existentes automáticamente.'
+}
+
+function Get-HubPlatformInfo { Platform\Get-HubPlatformInfo @args }
+function Join-HubPath {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]] $Segments)
+  Platform\Join-HubPath @Segments
+}
+function Compare-HubPath {
+  param([Parameter(Mandatory = $true)][string] $Left, [Parameter(Mandatory = $true)][string] $Right)
+  Platform\Compare-HubPath -Left $Left -Right $Right
+}
+function Resolve-HubModulePath {
+  param([Parameter(Mandatory = $true)][string] $ScriptRoot, [Parameter(Mandatory = $true)][string] $ModuleName)
+  Platform\Resolve-HubModulePath -ScriptRoot $ScriptRoot -ModuleName $ModuleName
+}
+function Test-HubPathUnderWindowsMount {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  Platform\Test-HubPathUnderWindowsMount -Path $Path
+}
+function Test-HubArchiMcpPath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  Platform\Test-HubArchiMcpPath -Path $Path
+}
+function Test-HubMcpConfigurationPaths {
+  param([bool] $IncludeBacklogMcp, [string] $BacklogMcpCwd, [bool] $IncludeArchiMcp, [string[]] $ArchiMcpArgs)
+  Platform\Test-HubMcpConfigurationPaths -IncludeBacklogMcp:$IncludeBacklogMcp -BacklogMcpCwd $BacklogMcpCwd -IncludeArchiMcp:$IncludeArchiMcp -ArchiMcpArgs $ArchiMcpArgs
+}
+function Write-HubPathLocationWarnings {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  Platform\Write-HubPathLocationWarnings -TargetPath $TargetPath
+}
+function Get-HubCommandExecutablePaths {
+  param([Parameter(Mandatory = $true)][string] $Name, [switch] $AllowWindowsExecutable)
+  Platform\Get-HubCommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable
 }
 
 Export-ModuleMember -Function @(
@@ -1579,5 +1603,8 @@ Export-ModuleMember -Function @(
   'New-HubMoveBackup', 'Move-HubRootDirectory', 'Invoke-HubRelocate',
   'Get-GentleAiProjectDiagnostic', 'Write-GentleAiProjectDiagnostic',
   'Get-HubProjectDiagnostic', 'Write-HubProjectDiagnostic',
-  'Get-ConsultingCopilotPreflightDiagnostic', 'Write-ConsultingCopilotPreflightDiagnostic'
+  'Get-ConsultingCopilotPreflightDiagnostic', 'Write-ConsultingCopilotPreflightDiagnostic',
+  'Get-HubPlatformInfo', 'Join-HubPath', 'Compare-HubPath', 'Resolve-HubModulePath',
+  'Test-HubPathUnderWindowsMount', 'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths',
+  'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths'
 )

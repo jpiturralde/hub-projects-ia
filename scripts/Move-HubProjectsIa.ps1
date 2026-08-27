@@ -34,7 +34,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ModulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
+$ModulePath = Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1'
 Import-Module $ModulePath -Force
 
 $defaultSource = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path

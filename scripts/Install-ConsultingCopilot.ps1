@@ -13,7 +13,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
-Import-Module (Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1') -Force
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1') -Force
 
 $result = Get-ConsultingCopilotPreflightDiagnostic -StackProfile $StackProfile -TargetPath $TargetPath
 

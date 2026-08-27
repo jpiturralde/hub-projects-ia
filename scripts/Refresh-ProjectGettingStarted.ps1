@@ -25,8 +25,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'Platform.psm1') -Force
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1') -Force
+
 $hubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
-Import-Module (Join-Path $hubRoot 'scripts\lib\ConsultingCopilot.psm1') -Force
 
 function Invoke-RefreshOne {
   param([string] $Path)
