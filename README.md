@@ -106,4 +106,6 @@ Requiere Pester. Cubre resolución de alcance, duplicados, perfiles, MCP local, 
 
 El template vive en `skeleton/` y `overlays/`. Los proyectos viven en `projects/`, quedan ignorados por Git en el padre y reciben su propio `git init`. Para trabajar, abrir siempre el hijo como workspace raíz.
 
+`Move-HubProjectsIa.ps1` es **Windows-only** (no Linux/WSL ni migración Windows↔WSL). Catálogo de scripts: [scripts/README.md](scripts/README.md).
+
 Flujo: [HUB-WORKFLOW.md](HUB-WORKFLOW.md). MCP opcionales: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md).

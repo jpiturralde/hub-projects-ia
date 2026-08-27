@@ -932,6 +932,8 @@ function New-HubMoveBackup {
     [Parameter(Mandatory = $true)][string] $BackupPath
   )
 
+  Assert-HubWindowsNativeHost -OperationName 'New-HubMoveBackup'
+
   if (Test-Path -LiteralPath $BackupPath) {
     throw "Ya existe el destino de backup: $BackupPath"
   }
@@ -943,6 +945,7 @@ function New-HubMoveBackup {
     New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
   }
 
+  # robocopy es Windows-only; sin él (raro en Windows) se usa Copy-Item.
   $robocopy = Get-Command robocopy.exe -ErrorAction SilentlyContinue
   if ($robocopy) {
     & robocopy.exe $source $backup /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -966,6 +969,8 @@ function Move-HubRootDirectory {
     [Parameter(Mandatory = $true)][string] $DestinationPath
   )
 
+  Assert-HubWindowsNativeHost -OperationName 'Move-HubRootDirectory'
+
   $source = Resolve-HubRootPath $SourcePath
   $destination = Resolve-HubRootPath $DestinationPath
   $destParent = Split-Path -Parent $destination
@@ -988,6 +993,11 @@ function Invoke-HubRelocate {
     [switch] $SkipBackup,
     [switch] $WhatIf
   )
+
+  # WhatIf puede planear en cualquier OS (sin escrituras). La ejecución real es Windows-only.
+  if (-not $WhatIf) {
+    Assert-HubWindowsNativeHost -OperationName 'Invoke-HubRelocate'
+  }
 
   $precheck = Test-HubMovePreconditions -SourcePath $SourcePath -DestinationPath $DestinationPath
   if (-not $precheck.Ok) {
@@ -1530,6 +1540,7 @@ function Write-ConsultingCopilotPreflightDiagnostic {
 }
 
 function Get-HubPlatformInfo { Platform\Get-HubPlatformInfo @args }
+function Assert-HubWindowsNativeHost { Platform\Assert-HubWindowsNativeHost @args }
 function Join-HubPath {
   param([Parameter(ValueFromRemainingArguments = $true)][string[]] $Segments)
   Platform\Join-HubPath @Segments
@@ -1626,7 +1637,7 @@ Export-ModuleMember -Function @(
   'Get-GentleAiProjectDiagnostic', 'Write-GentleAiProjectDiagnostic',
   'Get-HubProjectDiagnostic', 'Write-HubProjectDiagnostic',
   'Get-ConsultingCopilotPreflightDiagnostic', 'Write-ConsultingCopilotPreflightDiagnostic',
-  'Get-HubPlatformInfo', 'Join-HubPath', 'Compare-HubPath', 'Resolve-HubModulePath',
+  'Get-HubPlatformInfo', 'Assert-HubWindowsNativeHost', 'Join-HubPath', 'Compare-HubPath', 'Resolve-HubModulePath',
   'Test-HubPathUnderWindowsMount', 'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths',
   'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths'
 )

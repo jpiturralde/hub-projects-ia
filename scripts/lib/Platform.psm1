@@ -220,11 +220,24 @@ function Write-HubPathLocationWarnings {
   }
 }
 
+function Assert-HubWindowsNativeHost {
+  param(
+    [string] $OperationName = 'Esta operación'
+  )
+  $info = Get-HubPlatformInfo
+  if ($info.IsWindowsNative) { return }
+  $where = if ($info.IsWsl) { 'WSL/Linux' } elseif ($info.IsLinux) { 'Linux' } elseif ($info.IsMacOS) { 'macOS' } else { $info.Platform }
+  throw ("$OperationName solo está soportada en Windows nativo (ahora: $where). " +
+    'No sirve para migrar el hub entre Windows y WSL ni para relocalizar desde Linux. ' +
+    'En Ubuntu/WSL mové el directorio con herramientas nativas y usá registry schema v2 (relativePath).')
+}
+
 Export-ModuleMember -Function @(
   'Reset-HubPlatformCache', 'Get-HubPlatformInfo',
   'Join-HubPath', 'Resolve-HubRootPath', 'Compare-HubPath', 'Test-HubPathIsChildOf',
   'Test-HubPathUnderWindowsMount', 'Test-HubExecutableIsWindowsOrigin',
   'Test-HubCommandAllowedOnPlatform', 'Get-HubCommandExecutablePaths',
   'Resolve-HubModulePath', 'Resolve-HubProjectsRootFromScript',
-  'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths', 'Write-HubPathLocationWarnings'
+  'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths', 'Write-HubPathLocationWarnings',
+  'Assert-HubWindowsNativeHost'
 )

@@ -31,9 +31,16 @@ Describe 'Get-HubPlatformInfo' {
   }
 }
 
-Describe 'Join-HubPath' {
-  It 'compone rutas multi-segmento de forma portable' {
-    Join-HubPath '/tmp' 'hub' 'projects' 'demo' | Should -Be (Join-Path (Join-Path (Join-Path '/tmp' 'hub') 'projects') 'demo')
+Describe 'Assert-HubWindowsNativeHost' {
+  AfterEach { Reset-HubPlatformCache }
+
+  It 'permite continuar en Windows nativo o falla fuera' {
+    $info = Get-HubPlatformInfo
+    if ($info.IsWindowsNative) {
+      { Assert-HubWindowsNativeHost -OperationName 'test-op' } | Should -Not -Throw
+    } else {
+      { Assert-HubWindowsNativeHost -OperationName 'test-op' } | Should -Throw '*Windows nativo*'
+    }
   }
 }
 

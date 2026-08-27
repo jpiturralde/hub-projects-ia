@@ -168,6 +168,12 @@ Describe 'Move-HubProjectsIa' {
 
   Context 'Migración integrada' {
     It 'crea backup, mueve el hub y deja rutas coherentes' {
+      $platform = Get-HubPlatformInfo
+      if (-not $platform.IsWindowsNative) {
+        Set-ItResult -Skipped -Because 'relocate físico es Windows-only'
+        return
+      }
+
       $source = Join-Path $TestDrive 'move-source'
       $destination = Join-Path $TestDrive 'move-dest'
       $backupRoot = Join-Path $TestDrive 'backups'
@@ -201,6 +207,97 @@ Describe 'Move-HubProjectsIa' {
       $result.WhatIf | Should -Be $true
       (Test-Path -LiteralPath $source) | Should -Be $true
       (Test-Path -LiteralPath $destination) | Should -Be $false
+    }
+  }
+
+  Context 'Windows-only guard' {
+    It 'Assert-HubWindowsNativeHost falla fuera de Windows' {
+      $platform = Get-HubPlatformInfo
+      if ($platform.IsWindowsNative) {
+        Set-ItResult -Skipped -Because 'host Windows nativo'
+        return
+      }
+      { Assert-HubWindowsNativeHost -OperationName 'Move-HubProjectsIa.ps1' } |
+        Should -Throw '*Windows nativo*'
+    }
+
+    It 'New-HubMoveBackup no escribe fuera de Windows' {
+      $platform = Get-HubPlatformInfo
+      if ($platform.IsWindowsNative) {
+        Set-ItResult -Skipped -Because 'host Windows nativo'
+        return
+      }
+
+      $source = Join-Path $TestDrive 'guard-source'
+      $backup = Join-Path $TestDrive 'guard-backup'
+      New-TestHubLayout -Root $source
+      $sentinel = Join-Path $source 'sentinel-marker.txt'
+      Set-Content -LiteralPath $sentinel -Value 'unchanged' -Encoding UTF8
+      $before = Get-Item -LiteralPath $sentinel
+
+      { New-HubMoveBackup -SourcePath $source -BackupPath $backup } | Should -Throw '*Windows nativo*'
+      (Test-Path -LiteralPath $backup) | Should -Be $false
+      $after = Get-Item -LiteralPath $sentinel
+      $after.Length | Should -Be $before.Length
+      $after.LastWriteTimeUtc | Should -Be $before.LastWriteTimeUtc
+    }
+
+    It 'el entrypoint sale 3 en Linux/WSL sin modificar el origen' {
+      $platform = Get-HubPlatformInfo
+      if ($platform.IsWindowsNative) {
+        Set-ItResult -Skipped -Because 'host Windows nativo'
+        return
+      }
+
+      $source = Join-Path $TestDrive 'entrypoint-source'
+      $destination = Join-Path $TestDrive 'entrypoint-dest'
+      New-TestHubLayout -Root $source
+      $sentinel = Join-Path $source 'entrypoint-sentinel.txt'
+      Set-Content -LiteralPath $sentinel -Value 'keep' -Encoding UTF8
+      $before = Get-Item -LiteralPath $sentinel
+
+      $scriptPath = Join-Path $script:repoRoot 'scripts\Move-HubProjectsIa.ps1'
+      $outFile = Join-Path $TestDrive 'move-out.txt'
+      $errFile = Join-Path $TestDrive 'move-err.txt'
+      $p = Start-Process -FilePath 'pwsh' -ArgumentList @(
+        '-NoProfile', '-File', $scriptPath,
+        '-SourcePath', $source,
+        '-DestinationPath', $destination,
+        '-Force'
+      ) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+      $p.ExitCode | Should -Be 3
+      (Test-Path -LiteralPath $destination) | Should -Be $false
+      (Test-Path -LiteralPath $source) | Should -Be $true
+      $after = Get-Item -LiteralPath $sentinel
+      $after.LastWriteTimeUtc | Should -Be $before.LastWriteTimeUtc
+      $combined = ((Get-Content $outFile -Raw -ErrorAction SilentlyContinue) + (Get-Content $errFile -Raw -ErrorAction SilentlyContinue))
+      $combined | Should -Match 'Windows nativo'
+    }
+
+    It 'en Windows el entrypoint acepta WhatIf sin error de plataforma' {
+      $platform = Get-HubPlatformInfo
+      if (-not $platform.IsWindowsNative) {
+        Set-ItResult -Skipped -Because 'requiere Windows nativo'
+        return
+      }
+
+      $source = Join-Path $TestDrive 'win-whatif-source'
+      $destination = Join-Path $TestDrive 'win-whatif-dest'
+      New-TestHubLayout -Root $source
+      $scriptPath = Join-Path $script:repoRoot 'scripts\Move-HubProjectsIa.ps1'
+      $outFile = Join-Path $TestDrive 'win-move-out.txt'
+      $errFile = Join-Path $TestDrive 'win-move-err.txt'
+      $p = Start-Process -FilePath 'pwsh' -ArgumentList @(
+        '-NoProfile', '-File', $scriptPath,
+        '-SourcePath', $source,
+        '-DestinationPath', $destination,
+        '-WhatIf'
+      ) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+      $p.ExitCode | Should -Be 0
+      (Test-Path -LiteralPath $destination) | Should -Be $false
+      (Test-Path -LiteralPath $source) | Should -Be $true
     }
   }
 }

@@ -1,22 +1,29 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Mueve todo el hub hub-projects-ia a otra ubicación con backup y actualización de rutas.
+  Mueve todo el hub hub-projects-ia a otra ubicación (solo Windows nativo).
 
 .DESCRIPTION
+  Herramienta Windows-only. No está soportada en Linux, WSL ni macOS, y no
+  sirve para migrar el hub entre Windows y WSL.
+
   1. Valida origen y destino
-  2. Crea una copia de backup junto al origen (no se borra automáticamente)
+  2. Crea una copia de backup junto al origen (robocopy; no se borra automáticamente)
   3. Mueve la carpeta del hub
   4. Actualiza hub-registry.json y .cursor/mcp.json de proyectos hijos
   5. Valida la migración
 
+  En Ubuntu/WSL: mové el directorio con herramientas nativas; el registry schema
+  v2 usa relativePath y no requiere esta herramienta.
+
   Cerrá Cursor y cualquier terminal abierta dentro del hub antes de ejecutar.
 
 .EXAMPLE
-  .\Move-HubProjectsIa.ps1
+  # Solo Windows
+  pwsh -File .\Move-HubProjectsIa.ps1
 
 .EXAMPLE
-  .\Move-HubProjectsIa.ps1 `
+  pwsh -File .\Move-HubProjectsIa.ps1 `
     -SourcePath "C:\work\hub-projects-ia" `
     -DestinationPath "D:\repos\hub-projects-ia"
 #>
@@ -36,6 +43,13 @@ $ErrorActionPreference = 'Stop'
 
 $ModulePath = Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1'
 Import-Module $ModulePath -Force
+
+try {
+  Assert-HubWindowsNativeHost -OperationName 'Move-HubProjectsIa.ps1'
+} catch {
+  Write-Host $_.Exception.Message -ForegroundColor Red
+  exit 3
+}
 
 $defaultSource = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
@@ -58,7 +72,7 @@ $destination = $precheck.DestinationPath
 $backupPath = Get-HubMoveBackupPath -SourcePath $source
 
 Write-Host ''
-Write-Host '=== Migración del hub ===' -ForegroundColor Cyan
+Write-Host '=== Migración del hub (Windows) ===' -ForegroundColor Cyan
 Write-Host "Origen:      $source"
 Write-Host "Destino:     $destination"
 Write-Host "Backup:      $backupPath"
@@ -67,6 +81,7 @@ Write-Host 'Antes de continuar:' -ForegroundColor Yellow
 Write-Host '  - Cerrá Cursor si tenés abierto el hub o algún proyecto hijo.'
 Write-Host '  - Cerrá terminales con cwd dentro del hub.'
 Write-Host '  - El backup quedará en disco; borralo manualmente cuando confirmes que todo funciona.'
+Write-Host '  - Esta herramienta no migra Windows↔WSL.'
 Write-Host ''
 
 if ($PSBoundParameters.ContainsKey('WhatIf')) {

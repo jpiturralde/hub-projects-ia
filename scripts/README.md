@@ -15,7 +15,7 @@ Motor único: **PowerShell 7** (`pwsh`). Los mismos entrypoints sirven en Window
 | `Test-HubProject.ps1` | Smoke read-only del hijo (estructura + Gentle AI) |
 | `Test-GentleAiProject.ps1` | Diagnóstico read-only Gentle AI / Engram |
 | `Refresh-ProjectGettingStarted.ps1` | Regenera GETTING-STARTED (ruta o registry v2) |
-| `Move-HubProjectsIa.ps1` | Relocalización **Windows-only** |
+| `Move-HubProjectsIa.ps1` | Relocalización **Windows-only** (no Linux/WSL; no Windows↔WSL) |
 
 ## Windows
 
@@ -73,3 +73,4 @@ pwsh -NoProfile -File ./Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
 - `-EngramPath` está **obsoleto** y se ignora (Engram lo administra Gentle AI).
 - Diagnósticos (`Install-*`, `Test-*`) son read-only respecto de Gentle AI/Engram administrados.
 - Registry: `hub-registry.json` schema **v2** con `relativePath` (portable).
+- `Move-HubProjectsIa.ps1` es **solo Windows nativo** (robocopy). En Ubuntu/WSL mové el directorio a mano; el registry v2 no depende de rutas absolutas personales.

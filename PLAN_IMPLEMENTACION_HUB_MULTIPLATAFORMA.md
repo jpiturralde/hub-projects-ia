@@ -521,11 +521,11 @@ Objetivo: documentar y proteger su alcance real.
 
 Tareas:
 
-- [ ] Agregar guard explícito de Windows al inicio.
-- [ ] Mantener `robocopy` y la lógica Windows solo dentro de este script/módulo específico.
-- [ ] Actualizar ayuda indicando que no sirve para Windows↔WSL.
-- [ ] Agregar test que compruebe fallo temprano y sin escrituras en Linux.
-- [ ] Agregar test Windows de su comportamiento actual si el entorno CI lo permite.
+- [x] Agregar guard explícito de Windows al inicio.
+- [x] Mantener `robocopy` y la lógica Windows solo dentro de este script/módulo específico.
+- [x] Actualizar ayuda indicando que no sirve para Windows↔WSL.
+- [x] Agregar test que compruebe fallo temprano y sin escrituras en Linux.
+- [x] Agregar test Windows de su comportamiento actual si el entorno CI lo permite.
 
 Criterios de salida:
 
@@ -593,7 +593,7 @@ Tareas:
 - [ ] Documentar comandos Ubuntu/WSL.
 - [ ] Documentar perfiles y flujo de instalación.
 - [ ] Documentar recuperación ante cancelación o error.
-- [ ] Documentar alcance Windows-only de `Move-HubProjectsIa.ps1`.
+- [x] Documentar alcance Windows-only de `Move-HubProjectsIa.ps1`.
 - [ ] Documentar migración del registry schema 1→2.
 - [ ] Registrar decisiones pendientes sobre componentes vs preset `minimal`.
 - [ ] Ejecutar suite completa y guardar el resumen final.
@@ -705,7 +705,7 @@ La implementación estará terminada cuando:
 - [ ] El registry utiliza rutas relativas y funciona en ambas plataformas.
 - [ ] Los diagnósticos son read-only.
 - [ ] Los scripts multiplataforma no contienen dependencias accidentales de Windows.
-- [ ] `Move-HubProjectsIa.ps1` está protegido y documentado como Windows-only.
+- [x] `Move-HubProjectsIa.ps1` está protegido y documentado como Windows-only.
 - [x] El launcher Bash no duplica lógica de negocio y pasa `shellcheck`.
 - [ ] Los manifiestos normalizados de Windows y Ubuntu son equivalentes.
 - [ ] Un piloto descartable fue validado antes de usar la solución sobre IPLAN.
