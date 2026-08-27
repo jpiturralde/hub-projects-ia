@@ -596,6 +596,410 @@ function Write-ProjectHandoffSummary {
   Write-Host 'Inicio recomendado: /start-task'; Write-Host ''
 }
 
+function Resolve-HubRootPath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Path vacío.' }
+  return [System.IO.Path]::GetFullPath($Path.Trim().TrimEnd('\', '/'))
+}
+
+function Test-HubPathIsChildOf {
+  param(
+    [Parameter(Mandatory = $true)][string] $ChildPath,
+    [Parameter(Mandatory = $true)][string] $ParentPath
+  )
+  $child = Resolve-HubRootPath $ChildPath
+  $parent = Resolve-HubRootPath $ParentPath
+  if ($child.Length -le $parent.Length) { return $false }
+  $sep = [System.IO.Path]::DirectorySeparatorChar
+  return $child.StartsWith($parent + $sep, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-HubRootLayout {
+  param([Parameter(Mandatory = $true)][string] $HubRoot)
+  $resolved = Resolve-HubRootPath $HubRoot
+  $markers = @(
+    (Join-Path $resolved 'hub-registry.json'),
+    (Join-Path $resolved 'scripts\New-HubProject.ps1'),
+    (Join-Path $resolved 'skeleton')
+  )
+  return @($markers | Where-Object { -not (Test-Path -LiteralPath $_) })
+}
+
+function Get-HubMoveBackupPath {
+  param(
+    [Parameter(Mandatory = $true)][string] $SourcePath,
+    [datetime] $Timestamp = (Get-Date)
+  )
+  $source = Resolve-HubRootPath $SourcePath
+  $leaf = Split-Path -Leaf $source
+  $parent = Split-Path -Parent $source
+  $stamp = $Timestamp.ToString('yyyyMMdd-HHmmss')
+  return Join-Path $parent "${leaf}-backup-${stamp}"
+}
+
+function Test-HubMovePreconditions {
+  param(
+    [Parameter(Mandatory = $true)][string] $SourcePath,
+    [Parameter(Mandatory = $true)][string] $DestinationPath
+  )
+
+  $issues = [System.Collections.Generic.List[string]]::new()
+  $source = Resolve-HubRootPath $SourcePath
+  $destination = Resolve-HubRootPath $DestinationPath
+
+  if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+    $issues.Add("Origen inexistente: $source")
+  }
+  else {
+    $missing = @(Test-HubRootLayout -HubRoot $source)
+    if ($missing.Count -gt 0) {
+      $issues.Add("Origen no parece un hub válido. Faltan: $($missing -join ', ')")
+    }
+  }
+
+  if ($source -eq $destination) {
+    $issues.Add('Origen y destino son la misma ruta.')
+  }
+
+  if (Test-HubPathIsChildOf -ChildPath $destination -ParentPath $source) {
+    $issues.Add('El destino no puede estar dentro del hub origen.')
+  }
+
+  if (Test-HubPathIsChildOf -ChildPath $source -ParentPath $destination) {
+    $issues.Add('El origen no puede estar dentro del destino.')
+  }
+
+  $destParent = Split-Path -Parent $destination
+  if ([string]::IsNullOrWhiteSpace($destParent)) {
+    $issues.Add("No se pudo resolver el directorio padre del destino: $destination")
+  }
+  elseif (-not (Test-Path -LiteralPath $destParent -PathType Container)) {
+    $issues.Add("El directorio padre del destino no existe: $destParent")
+  }
+
+  if (Test-Path -LiteralPath $destination) {
+    $existing = @(Get-ChildItem -LiteralPath $destination -Force -ErrorAction SilentlyContinue)
+    if ($existing.Count -gt 0) {
+      $issues.Add("El destino ya existe y no está vacío: $destination")
+    }
+  }
+
+  return [pscustomobject]@{
+    Ok = ($issues.Count -eq 0)
+    SourcePath = $source
+    DestinationPath = $destination
+    Issues = @($issues)
+  }
+}
+
+function Replace-HubPathPrefixInText {
+  param(
+    [Parameter(Mandatory = $true)][string] $Text,
+    [Parameter(Mandatory = $true)][string] $OldPrefix,
+    [Parameter(Mandatory = $true)][string] $NewPrefix
+  )
+  if ([string]::IsNullOrEmpty($Text)) { return $Text }
+
+  $old = Resolve-HubRootPath $OldPrefix
+  $new = Resolve-HubRootPath $NewPrefix
+  if ($old -eq $new) { return $Text }
+  if ($Text.IndexOf($old, [StringComparison]::OrdinalIgnoreCase) -lt 0) { return $Text }
+
+  $result = $Text
+  $index = 0
+  while (($index = $result.IndexOf($old, $index, [StringComparison]::OrdinalIgnoreCase)) -ge 0) {
+    $result = $result.Remove($index, $old.Length).Insert($index, $new)
+    $index += $new.Length
+  }
+  return $result
+}
+
+function Replace-HubPathLiteralInText {
+  param(
+    [Parameter(Mandatory = $true)][string] $Text,
+    [Parameter(Mandatory = $true)][string] $OldLiteral,
+    [Parameter(Mandatory = $true)][string] $NewLiteral
+  )
+  if ([string]::IsNullOrEmpty($Text) -or [string]::IsNullOrEmpty($OldLiteral)) { return $Text }
+  if ($OldLiteral -eq $NewLiteral) { return $Text }
+  if ($Text.IndexOf($OldLiteral, [StringComparison]::OrdinalIgnoreCase) -lt 0) { return $Text }
+
+  $result = $Text
+  $index = 0
+  while (($index = $result.IndexOf($OldLiteral, $index, [StringComparison]::OrdinalIgnoreCase)) -ge 0) {
+    $result = $result.Remove($index, $OldLiteral.Length).Insert($index, $NewLiteral)
+    $index += $NewLiteral.Length
+  }
+  return $result
+}
+
+function Update-HubRegistryPaths {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $OldHubRoot
+  )
+
+  $registryPath = Join-Path $HubRoot 'hub-registry.json'
+  if (-not (Test-Path -LiteralPath $registryPath)) {
+    return [pscustomobject]@{ Updated = $false; Path = $registryPath; ProjectCount = 0 }
+  }
+
+  $hub = Resolve-HubRootPath $HubRoot
+  $oldHub = Resolve-HubRootPath $OldHubRoot
+  $raw = [System.IO.File]::ReadAllText($registryPath, [System.Text.UTF8Encoding]::new($false))
+  $registry = $raw | ConvertFrom-Json
+  $projects = @($registry.projects)
+  $updatedCount = 0
+
+  foreach ($project in $projects) {
+    if (-not $project.absolutePath) { continue }
+    $current = [string]$project.absolutePath
+    if ($current.StartsWith($oldHub, [StringComparison]::OrdinalIgnoreCase)) {
+      $suffix = $current.Substring($oldHub.Length)
+      $project.absolutePath = $hub + $suffix
+      $updatedCount++
+    }
+  }
+
+  if ($updatedCount -gt 0) {
+    $json = ($registry | ConvertTo-Json -Depth 8) + "`n"
+    [System.IO.File]::WriteAllText($registryPath, $json, [System.Text.UTF8Encoding]::new($false))
+  }
+
+  return [pscustomobject]@{
+    Updated = ($updatedCount -gt 0)
+    Path = $registryPath
+    ProjectCount = $updatedCount
+  }
+}
+
+function Update-HubChildMcpPaths {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $OldHubRoot
+  )
+
+  $hub = Resolve-HubRootPath $HubRoot
+  $oldHub = Resolve-HubRootPath $OldHubRoot
+  $projectsRoot = Join-Path $hub 'projects'
+  $updatedFiles = [System.Collections.Generic.List[string]]::new()
+
+  if (-not (Test-Path -LiteralPath $projectsRoot -PathType Container)) {
+    return @()
+  }
+
+  foreach ($projectDir in @(Get-ChildItem -LiteralPath $projectsRoot -Directory -ErrorAction SilentlyContinue)) {
+    $mcpPath = Join-Path $projectDir.FullName '.cursor\mcp.json'
+    if (-not (Test-Path -LiteralPath $mcpPath -PathType Leaf)) { continue }
+
+    $raw = [System.IO.File]::ReadAllText($mcpPath, [System.Text.UTF8Encoding]::new($false))
+    $newRaw = Replace-HubPathPrefixInText -Text $raw -OldPrefix $oldHub -NewPrefix $hub
+
+    $oldJson = $oldHub.Replace('\', '\\')
+    $newJson = $hub.Replace('\', '\\')
+    if ($oldJson -ne $oldHub) {
+      $newRaw = Replace-HubPathLiteralInText -Text $newRaw -OldLiteral $oldJson -NewLiteral $newJson
+    }
+
+    if ($newRaw -eq $raw) { continue }
+
+    [System.IO.File]::WriteAllText($mcpPath, $newRaw, [System.Text.UTF8Encoding]::new($false))
+    $updatedFiles.Add($mcpPath) | Out-Null
+  }
+
+  return @($updatedFiles)
+}
+
+function Update-HubPathReferences {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $OldHubRoot
+  )
+
+  $registryResult = Update-HubRegistryPaths -HubRoot $HubRoot -OldHubRoot $OldHubRoot
+  $mcpFiles = @(Update-HubChildMcpPaths -HubRoot $HubRoot -OldHubRoot $OldHubRoot)
+
+  return [pscustomobject]@{
+    HubRoot = (Resolve-HubRootPath $HubRoot)
+    OldHubRoot = (Resolve-HubRootPath $OldHubRoot)
+    Registry = $registryResult
+    UpdatedMcpFiles = $mcpFiles
+  }
+}
+
+function Test-HubMoveResult {
+  param([Parameter(Mandatory = $true)][string] $HubRoot)
+
+  $issues = [System.Collections.Generic.List[string]]::new()
+  $hub = Resolve-HubRootPath $HubRoot
+
+  foreach ($missing in @(Test-HubRootLayout -HubRoot $hub)) {
+    $issues.Add("Estructura del hub incompleta. Falta: $missing")
+  }
+
+  $registryPath = Join-Path $hub 'hub-registry.json'
+  if (-not (Test-Path -LiteralPath $registryPath)) {
+    $issues.Add('No se encontró hub-registry.json.')
+    return [pscustomobject]@{ Ok = $false; HubRoot = $hub; Issues = @($issues) }
+  }
+
+  $registry = Get-Content -LiteralPath $registryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  foreach ($project in @($registry.projects)) {
+    if (-not $project.absolutePath) { continue }
+    $projectPath = [string]$project.absolutePath
+    if (-not $projectPath.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
+      $issues.Add("absolutePath fuera del hub ($($project.folderName)): $projectPath")
+    }
+    if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) {
+      $issues.Add("Proyecto registrado no encontrado ($($project.folderName)): $projectPath")
+    }
+
+    $mcpPath = Join-Path $projectPath '.cursor\mcp.json'
+    if (-not (Test-Path -LiteralPath $mcpPath)) { continue }
+
+    try {
+      $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $backlog = $null
+      if ($mcp.mcpServers.PSObject.Properties.Name -contains 'backlog') {
+        $backlog = $mcp.mcpServers.backlog
+      }
+      if ($backlog -and $backlog.args) {
+        $backlogArgs = @($backlog.args)
+        for ($i = 0; $i -lt $backlogArgs.Count; $i++) {
+          if ($backlogArgs[$i] -eq '--cwd' -and ($i + 1) -lt $backlogArgs.Count) {
+            $cwd = [string]$backlogArgs[$i + 1]
+            if ($cwd -and -not (Test-Path -LiteralPath $cwd -PathType Container)) {
+              $issues.Add("Backlog MCP --cwd inválido ($($project.folderName)): $cwd")
+            }
+            elseif ($cwd -and -not $cwd.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
+              $issues.Add("Backlog MCP --cwd fuera del hub ($($project.folderName)): $cwd")
+            }
+          }
+        }
+      }
+    }
+    catch {
+      $issues.Add("mcp.json inválido ($($project.folderName)): $mcpPath")
+    }
+  }
+
+  return [pscustomobject]@{
+    Ok = ($issues.Count -eq 0)
+    HubRoot = $hub
+    Issues = @($issues)
+  }
+}
+
+function New-HubMoveBackup {
+  param(
+    [Parameter(Mandatory = $true)][string] $SourcePath,
+    [Parameter(Mandatory = $true)][string] $BackupPath
+  )
+
+  if (Test-Path -LiteralPath $BackupPath) {
+    throw "Ya existe el destino de backup: $BackupPath"
+  }
+
+  $source = Resolve-HubRootPath $SourcePath
+  $backup = Resolve-HubRootPath $BackupPath
+  $backupParent = Split-Path -Parent $backup
+  if (-not (Test-Path -LiteralPath $backupParent -PathType Container)) {
+    New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
+  }
+
+  $robocopy = Get-Command robocopy.exe -ErrorAction SilentlyContinue
+  if ($robocopy) {
+    & robocopy.exe $source $backup /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -gt 7) {
+      throw "Robocopy falló al crear backup (código $LASTEXITCODE)."
+    }
+  }
+  else {
+    Copy-Item -LiteralPath $source -Destination $backup -Recurse -Force
+  }
+
+  return [pscustomobject]@{
+    SourcePath = $source
+    BackupPath = $backup
+  }
+}
+
+function Move-HubRootDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string] $SourcePath,
+    [Parameter(Mandatory = $true)][string] $DestinationPath
+  )
+
+  $source = Resolve-HubRootPath $SourcePath
+  $destination = Resolve-HubRootPath $DestinationPath
+  $destParent = Split-Path -Parent $destination
+
+  if (-not (Test-Path -LiteralPath $destParent -PathType Container)) {
+    New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+  }
+
+  Move-Item -LiteralPath $source -Destination $destination
+  return [pscustomobject]@{
+    SourcePath = $source
+    DestinationPath = (Resolve-HubRootPath $destination)
+  }
+}
+
+function Invoke-HubRelocate {
+  param(
+    [Parameter(Mandatory = $true)][string] $SourcePath,
+    [Parameter(Mandatory = $true)][string] $DestinationPath,
+    [switch] $SkipBackup,
+    [switch] $WhatIf
+  )
+
+  $precheck = Test-HubMovePreconditions -SourcePath $SourcePath -DestinationPath $DestinationPath
+  if (-not $precheck.Ok) {
+    throw ($precheck.Issues -join [Environment]::NewLine)
+  }
+
+  $source = $precheck.SourcePath
+  $destination = $precheck.DestinationPath
+  $backupPath = Get-HubMoveBackupPath -SourcePath $source
+
+  $plan = [ordered]@{
+    SourcePath = $source
+    DestinationPath = $destination
+    BackupPath = if ($SkipBackup) { $null } else { $backupPath }
+  }
+
+  if ($WhatIf) {
+    return [pscustomobject]@{
+      WhatIf = $true
+      Plan = $plan
+      Validation = $null
+      PathUpdates = $null
+    }
+  }
+
+  $backupResult = $null
+  if (-not $SkipBackup) {
+    $backupResult = New-HubMoveBackup -SourcePath $source -BackupPath $backupPath
+  }
+
+  $moveResult = Move-HubRootDirectory -SourcePath $source -DestinationPath $destination
+  $pathUpdates = Update-HubPathReferences -HubRoot $destination -OldHubRoot $source
+  $validation = Test-HubMoveResult -HubRoot $destination
+
+  if (-not $validation.Ok) {
+    throw ("La migración terminó pero la validación falló:`n" + ($validation.Issues -join [Environment]::NewLine))
+  }
+
+  return [pscustomobject]@{
+    WhatIf = $false
+    Plan = $plan
+    Backup = $backupResult
+    Move = $moveResult
+    PathUpdates = $pathUpdates
+    Validation = $validation
+  }
+}
+
 Export-ModuleMember -Function @(
   'ConvertTo-ConsultingSlug', 'Read-ConsultingPrompt', 'Read-ConsultingPromptYesNo', 'Read-ConsultingChoice',
   'Test-ConsultingTargetPath', 'Copy-ConsultingSkeleton', 'Copy-ProjectOverlay',
@@ -606,5 +1010,9 @@ Export-ModuleMember -Function @(
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',
-  'Invoke-OpenCursorWorkspace', 'Write-ProjectHandoffSummary'
+  'Invoke-OpenCursorWorkspace', 'Write-ProjectHandoffSummary',
+  'Resolve-HubRootPath', 'Test-HubPathIsChildOf', 'Test-HubRootLayout', 'Get-HubMoveBackupPath',
+  'Test-HubMovePreconditions', 'Replace-HubPathPrefixInText', 'Replace-HubPathLiteralInText', 'Update-HubRegistryPaths',
+  'Update-HubChildMcpPaths', 'Update-HubPathReferences', 'Test-HubMoveResult',
+  'New-HubMoveBackup', 'Move-HubRootDirectory', 'Invoke-HubRelocate'
 )
