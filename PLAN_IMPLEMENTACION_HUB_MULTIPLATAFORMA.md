@@ -391,18 +391,18 @@ Objetivo: convertir la detección/instalación en un flujo explícito, testeable
 
 Tareas:
 
-- [ ] Extraer la detección a funciones puras cuando sea posible.
-- [ ] Separar presencia del CLI, configuración y estado saludable.
-- [ ] Modelar el resultado como un objeto con estado, alcance, rutas y errores.
-- [ ] Preservar la preferencia por instalación global existente.
-- [ ] Preservar reutilización workspace cuando corresponda.
-- [ ] Mantener la elección Global/Workspace/Cancelar cuando no exista configuración.
-- [ ] Mantener el comportamiento actual de instalación de componentes.
-- [ ] No ejecutar `sync`, `upgrade` ni reparación automática.
-- [ ] Evitar duplicar MCP de Engram.
-- [ ] Tratar global + workspace ambiguos como preflight fallido.
-- [ ] Tratar un CLI Windows dentro de WSL como inválido.
-- [ ] Mantener `-EngramPath` solo si es necesario para retrocompatibilidad, documentándolo como obsoleto si corresponde.
+- [x] Extraer la detección a funciones puras cuando sea posible.
+- [x] Separar presencia del CLI, configuración y estado saludable.
+- [x] Modelar el resultado como un objeto con estado, alcance, rutas y errores.
+- [x] Preservar la preferencia por instalación global existente.
+- [x] Preservar reutilización workspace cuando corresponda.
+- [x] Mantener la elección Global/Workspace/Cancelar cuando no exista configuración.
+- [x] Mantener el comportamiento actual de instalación de componentes.
+- [x] No ejecutar `sync`, `upgrade` ni reparación automática.
+- [x] Evitar duplicar MCP de Engram.
+- [x] Tratar global + workspace ambiguos como preflight fallido.
+- [x] Tratar un CLI Windows dentro de WSL como inválido.
+- [x] Mantener `-EngramPath` solo si es necesario para retrocompatibilidad, documentándolo como obsoleto si corresponde.
 
 Criterios de salida:
 

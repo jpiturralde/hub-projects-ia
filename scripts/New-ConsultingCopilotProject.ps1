@@ -33,14 +33,17 @@ param(
   [string] $ArchimateViewsFilename,
   [string] $BacklogMcpCwd,
   [string[]] $ArchiMcpArgs,
-  [string] $EngramPath,
+  [string] $EngramPath, # Obsolete: ignored. Engram is managed by Gentle AI.
   [bool] $IncludeDrawioMcp = $true,
   [switch] $IncludeBacklogMcp,
   [switch] $IncludeArchiMcp,
   [bool] $IncludeClaudeCoworkLayer = $false,
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipHandoffSummary,
-  [switch] $Force
+  [switch] $Force,
+  # Solo tests / automatización no interactiva (I|X|C y G|P|X).
+  [string] $GentleAiCliChoice,
+  [string] $GentleAiScopeChoice
 )
 
 Set-StrictMode -Version Latest
@@ -89,26 +92,25 @@ $gentleDecision = $null
 $gentleCliPath = $null
 
 if ($requiresGentleAi) {
-  $preflightEnvironment = Get-GentleAiEnvironment -TargetPath $TargetPath
-  if ($preflightEnvironment.GlobalInstalled -and $preflightEnvironment.WorkspaceInstalled) {
-    throw 'Se detectó Gentle AI global y también en el workspace. Ejecutá el diagnóstico antes de generar.'
-  }
-  if ($preflightEnvironment.GlobalInstalled -and $GentleAiScope -eq 'Workspace') {
-    throw 'No se permite Gentle AI local porque ya existe configuración global.'
-  }
-  if ($preflightEnvironment.WorkspaceInstalled -and $GentleAiScope -eq 'Global') {
-    throw 'El workspace ya contiene Gentle AI; no se instalará otra copia global automáticamente.'
-  }
   $cliMode = if ($GentleAiScope -eq 'Existing') { 'Existing' } else { 'Auto' }
-  $cliResolution = Ensure-GentleAiCli -Mode $cliMode -AllowConsultingFallback:($effectiveProfile -eq 'ConsultingAI' -and $GentleAiScope -eq 'Auto')
-  if ($cliResolution.FallbackToConsulting) {
+  $preflightParams = @{
+    TargetPath = $TargetPath
+    RequestedScope = $GentleAiScope
+    CliMode = $cliMode
+    AllowConsultingFallback = ($effectiveProfile -eq 'ConsultingAI' -and $GentleAiScope -eq 'Auto')
+  }
+  if (-not [string]::IsNullOrWhiteSpace($GentleAiCliChoice)) { $preflightParams['CliChoice'] = $GentleAiCliChoice }
+  if (-not [string]::IsNullOrWhiteSpace($GentleAiScopeChoice)) { $preflightParams['ScopeChoice'] = $GentleAiScopeChoice }
+  $preflight = Resolve-GentleAiPreflight @preflightParams
+  if ($preflight.Status -eq 'Failed') { throw $preflight.Error }
+  if ($preflight.Status -eq 'Cancelled') { throw $preflight.Error }
+  if ($preflight.FallbackToConsulting) {
     Write-Warning 'Se continuará con perfil Consulting sin Gentle AI, por elección del usuario.'
     $effectiveProfile = 'Consulting'
     $requiresGentleAi = $false
   } else {
-    $gentleCliPath = $cliResolution.Path
-    $environment = Get-GentleAiEnvironment -TargetPath $TargetPath
-    $gentleDecision = Resolve-GentleAiScopeDecision -Environment $environment -RequestedScope $GentleAiScope
+    $gentleCliPath = $preflight.Cli.Path
+    $gentleDecision = $preflight.Decision
     if ($gentleDecision.Action -eq 'Install' -and $gentleDecision.Scope -eq 'Global') {
       Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Global -TargetPath $TargetPath
       $verified = Get-GentleAiEnvironment -TargetPath $TargetPath
@@ -118,7 +120,7 @@ if ($requiresGentleAi) {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($EngramPath)) {
-  Write-Warning '-EngramPath se conserva sólo por compatibilidad y se ignora: Engram es administrado por Gentle AI y no se duplica en el MCP local.'
+  Write-Warning '-EngramPath está obsoleto y se ignora: Engram es administrado por Gentle AI y no se duplica en el MCP local.'
 }
 
 $finalTargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force

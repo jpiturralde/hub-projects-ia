@@ -2,6 +2,7 @@
 Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'Platform.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'GentleAi.psm1') -Force
 
 $script:TextExtensions = @(
   '.md', '.mdc', '.json', '.lua', '.yml', '.yaml', '.xml', '.drawio', '.gitignore', '.ps1', '.puml', '.mdx'
@@ -179,22 +180,12 @@ function Get-CommandExecutablePaths {
 
 function Test-McpServerConfigured {
   param([string] $McpJsonPath, [string] $ServerName)
-  if (-not (Test-Path -LiteralPath $McpJsonPath -PathType Leaf)) { return $false }
-  try {
-    $config = Get-Content -LiteralPath $McpJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    return [bool]($config.mcpServers -and $config.mcpServers.PSObject.Properties.Name -contains $ServerName)
-  } catch { return $false }
+  return Test-GentleAiMcpServerConfigured -McpJsonPath $McpJsonPath -ServerName $ServerName
 }
 
 function Get-ConsultingUserHome {
   param([string] $UserHome)
-  if (-not [string]::IsNullOrWhiteSpace($UserHome)) {
-    return Resolve-HubRootPath $UserHome
-  }
-  if (-not [string]::IsNullOrWhiteSpace($env:TEST_USER_HOME)) {
-    return Resolve-HubRootPath $env:TEST_USER_HOME
-  }
-  return [Environment]::GetFolderPath('UserProfile')
+  return Get-GentleAiUserHome -UserHome $UserHome
 }
 
 function Get-HubProjectsIaRoot {
@@ -208,113 +199,63 @@ function Get-HubProjectsIaRoot {
   return Resolve-HubProjectsRootFromScript -ScriptRoot $ScriptRoot
 }
 
-function Get-GentleAiEnvironment {
-  param([string] $TargetPath, [string] $UserHome)
-  $UserHome = Get-ConsultingUserHome -UserHome $UserHome
-  $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  $globalRule = Join-HubPath $UserHome '.cursor' 'rules' 'gentle-ai.mdc'
-  $globalState = Join-HubPath $UserHome '.gentle-ai' 'state.json'
-  $globalMcp = Join-HubPath $UserHome '.cursor' 'mcp.json'
-  $globalMarkers = @(
-    $globalRule,
-    (Join-HubPath $UserHome '.cursor' 'agents' 'sdd-init.md'),
-    (Join-HubPath $UserHome '.cursor' 'skills' 'sdd-init' 'SKILL.md')
-  )
-  $stateMentionsCursor = $false
-  if (Test-Path -LiteralPath $globalState -PathType Leaf) {
-    try { $stateMentionsCursor = (Get-Content -LiteralPath $globalState -Raw -Encoding UTF8) -match '(?i)"cursor"' }
-    catch { $stateMentionsCursor = $false }
-  }
-  $workspaceMarkers = @()
-  $workspaceMcp = $null
-  if (-not [string]::IsNullOrWhiteSpace($TargetPath)) {
-    $workspaceMarkers = @(
-      (Join-HubPath $TargetPath '.cursor' 'rules' 'gentle-ai.mdc'),
-      (Join-HubPath $TargetPath '.cursor' 'agents' 'sdd-init.md'),
-      (Join-HubPath $TargetPath '.cursor' 'skills' 'sdd-init' 'SKILL.md')
-    )
-    $workspaceMcp = Join-HubPath $TargetPath '.cursor' 'mcp.json'
-  }
-  $existingWorkspaceMarkers = @($workspaceMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-  $existingGlobalMarkers = @($globalMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-  return [pscustomobject]@{
-    CliPaths = $cliPaths; CliCount = $cliPaths.Count
-    CliPath = if ($cliPaths.Count -eq 1) { $cliPaths[0] } else { $null }
-    GlobalInstalled = ($existingGlobalMarkers.Count -gt 0) -or $stateMentionsCursor
-    GlobalMarkerPaths = $existingGlobalMarkers
-    GlobalRulePath = $globalRule; GlobalStatePath = $globalState
-    GlobalStateExists = Test-Path -LiteralPath $globalState -PathType Leaf
-    GlobalMcpPath = $globalMcp
-    GlobalEngramConfigured = Test-McpServerConfigured -McpJsonPath $globalMcp -ServerName 'engram'
-    WorkspaceInstalled = $existingWorkspaceMarkers.Count -gt 0
-    WorkspaceMarkerPaths = $existingWorkspaceMarkers; WorkspaceMcpPath = $workspaceMcp
-    WorkspaceEngramConfigured = if ($workspaceMcp) { Test-McpServerConfigured -McpJsonPath $workspaceMcp -ServerName 'engram' } else { $false }
-  }
-}
-
-function Install-GentleAiCliStable {
-  $goPaths = @(Get-CommandExecutablePaths -Name 'go')
-  if ($goPaths.Count -ne 1) {
-    throw 'Para instalar Gentle AI estable se requiere una única instalación de Go en PATH. Instalá Go 1.25.10+ y volvé a ejecutar.'
-  }
-  Write-Host 'Instalando Gentle AI estable con Go...'
-  & $goPaths[0] install github.com/gentleman-programming/gentle-ai/v2/cmd/gentle-ai@latest
-  if ($LASTEXITCODE -ne 0) { throw "La instalación de gentle-ai falló con código $LASTEXITCODE." }
-  $goPath = (& $goPaths[0] env GOPATH | Select-Object -First 1).Trim()
-  if ($goPath) {
-    $binPath = Join-Path $goPath 'bin'
-    if (($env:PATH -split [System.IO.Path]::PathSeparator) -notcontains $binPath) {
-      $env:PATH = "$binPath$([System.IO.Path]::PathSeparator)$env:PATH"
-    }
-  }
-  $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  if ($cliPaths.Count -ne 1) {
-    throw "La instalación terminó pero se detectaron $($cliPaths.Count) ejecutables de gentle-ai. Revisá PATH:`n$($cliPaths -join "`n")"
-  }
-  return $cliPaths[0]
-}
-
 function Ensure-GentleAiCli {
-  param([ValidateSet('Auto', 'Existing')] [string] $Mode = 'Auto', [switch] $AllowConsultingFallback)
-  $paths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  if ($paths.Count -gt 1) {
-    throw "Se detectaron varias instalaciones de gentle-ai. Conservá una sola en PATH:`n$($paths -join "`n")"
+  param(
+    [ValidateSet('Auto', 'Existing')] [string] $Mode = 'Auto',
+    [switch] $AllowConsultingFallback,
+    [string] $Choice
+  )
+  $params = @{
+    Mode = $Mode
+    AllowConsultingFallback = $AllowConsultingFallback
   }
-  if ($paths.Count -eq 1) { return [pscustomobject]@{ Available = $true; Path = $paths[0]; FallbackToConsulting = $false } }
-  if ($Mode -eq 'Existing') { throw 'gentle-ai no está en PATH y se solicitó usar una instalación existente.' }
-  $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
-  if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
-  $choice = Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
-  if ($choice -eq 'X') { throw 'Operación cancelada por el usuario antes de generar archivos.' }
-  if ($choice -eq 'C') { return [pscustomobject]@{ Available = $false; Path = $null; FallbackToConsulting = $true } }
-  $path = Install-GentleAiCliStable
-  return [pscustomobject]@{ Available = $true; Path = $path; FallbackToConsulting = $false }
+  if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+    $params['Choice'] = $Choice
+  } else {
+    $params['PromptChoice'] = {
+      $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
+      if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
+      Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
+    }.GetNewClosure()
+  }
+  $result = GentleAi\Ensure-GentleAiCli @params
+  if ($result.Status -eq 'Cancelled') {
+    throw 'Operación cancelada por el usuario antes de generar archivos.'
+  }
+  return $result
 }
 
 function Resolve-GentleAiScopeDecision {
-  param([psobject] $Environment, [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto')
-  if ($Environment.CliCount -gt 1) { throw "Se detectaron varias instalaciones de gentle-ai:`n$($Environment.CliPaths -join "`n")" }
-  if ($Environment.GlobalInstalled -and $Environment.WorkspaceInstalled) {
-    throw 'Se detectó Gentle AI global y también en el workspace. No se modificará nada automáticamente. Ejecutá el diagnóstico y corregí la duplicación con comandos administrados por Gentle AI.'
+  param(
+    [psobject] $Environment,
+    [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto',
+    [string] $Choice
+  )
+  $params = @{
+    Environment = $Environment
+    RequestedScope = $RequestedScope
   }
-  if ($Environment.GlobalInstalled) {
-    if ($RequestedScope -eq 'Workspace') { throw 'No se permite Gentle AI local porque ya existe configuración global.' }
-    return [pscustomobject]@{ Action = 'Reuse'; Scope = 'Global'; Reason = 'global-existing' }
+  if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+    $params['Choice'] = $Choice
+  } elseif ($RequestedScope -eq 'Auto' -and -not $Environment.GlobalInstalled -and -not $Environment.WorkspaceInstalled) {
+    $params['PromptChoice'] = {
+      Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
+        -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
+    }
   }
-  if ($Environment.WorkspaceInstalled) {
-    if ($RequestedScope -eq 'Global') { throw 'El workspace ya contiene Gentle AI; no se instalará otra copia global automáticamente.' }
-    return [pscustomobject]@{ Action = 'Reuse'; Scope = 'Workspace'; Reason = 'workspace-existing' }
+  $decision = GentleAi\Resolve-GentleAiScopeDecision @params
+  if ($decision.Status -eq 'Cancelled') {
+    throw 'Operación cancelada antes de instalar Gentle AI.'
   }
-  if ($RequestedScope -eq 'Existing') { throw 'No se encontró una configuración Gentle AI existente para Cursor.' }
-  if ($RequestedScope -eq 'Global') { return [pscustomobject]@{ Action = 'Install'; Scope = 'Global'; Reason = 'explicit-global' } }
-  if ($RequestedScope -eq 'Workspace') { return [pscustomobject]@{ Action = 'Install'; Scope = 'Workspace'; Reason = 'explicit-workspace' } }
-  $choice = Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
-    -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
-  if ($choice -eq 'X') { throw 'Operación cancelada antes de instalar Gentle AI.' }
-  $scope = if ($choice -eq 'G') { 'Global' } else { 'Workspace' }
-  return [pscustomobject]@{ Action = 'Install'; Scope = $scope; Reason = 'interactive-choice' }
+  return $decision
 }
 
+function Get-GentleAiEnvironment {
+  param([string] $TargetPath, [string] $UserHome)
+  GentleAi\Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
+}
+
+function Install-GentleAiCliStable { GentleAi\Install-GentleAiCliStable }
 function Invoke-GentleAiInstall {
   param(
     [string] $CliPath,
@@ -322,29 +263,47 @@ function Invoke-GentleAiInstall {
     [string] $TargetPath,
     [string] $UserHome
   )
-  if (-not (Test-Path -LiteralPath $CliPath -PathType Leaf)) { throw "gentle-ai no encontrado: $CliPath" }
-  if ($Scope -eq 'Workspace' -and [string]::IsNullOrWhiteSpace($TargetPath)) { throw 'Workspace requiere TargetPath.' }
-  $workingPath = if ($Scope -eq 'Workspace') { $TargetPath } else { Get-ConsultingUserHome -UserHome $UserHome }
-  Write-Host "Configurando Gentle AI para Cursor con alcance $Scope..."
-  Push-Location $workingPath
-  try {
-    & $CliPath install --agent cursor --scope $Scope.ToLowerInvariant() --component engram,sdd,skills
-    if ($LASTEXITCODE -ne 0) { throw "gentle-ai install falló con código $LASTEXITCODE." }
-  } finally { Pop-Location }
+  GentleAi\Invoke-GentleAiInstall -CliPath $CliPath -Scope $Scope -TargetPath $TargetPath -UserHome $UserHome
 }
-
 function Invoke-SkillRegistryRefresh {
   param([string] $TargetPath, [string] $CliPath)
-  if ([string]::IsNullOrWhiteSpace($CliPath)) {
-    $paths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-    if ($paths.Count -ne 1) { Write-Warning 'No hay un único gentle-ai en PATH; se omite skill-registry refresh.'; return }
-    $CliPath = $paths[0]
+  GentleAi\Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $CliPath
+}
+function Resolve-GentleAiPreflight {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto',
+    [ValidateSet('Auto', 'Existing')] [string] $CliMode = 'Auto',
+    [switch] $AllowConsultingFallback,
+    [string] $CliChoice,
+    [string] $ScopeChoice,
+    [string] $UserHome
+  )
+  $params = @{
+    TargetPath = $TargetPath
+    RequestedScope = $RequestedScope
+    CliMode = $CliMode
+    AllowConsultingFallback = $AllowConsultingFallback
+    UserHome = $UserHome
   }
-  Push-Location $TargetPath
-  try {
-    & $CliPath skill-registry refresh --force
-    if ($LASTEXITCODE -ne 0) { Write-Warning "skill-registry refresh terminó con código $LASTEXITCODE." }
-  } finally { Pop-Location }
+  if (-not [string]::IsNullOrWhiteSpace($CliChoice)) {
+    $params['CliChoice'] = $CliChoice
+  } else {
+    $params['PromptCliChoice'] = {
+      $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
+      if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
+      Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
+    }.GetNewClosure()
+  }
+  if (-not [string]::IsNullOrWhiteSpace($ScopeChoice)) {
+    $params['ScopeChoice'] = $ScopeChoice
+  } elseif ($RequestedScope -eq 'Auto') {
+    $params['PromptScopeChoice'] = {
+      Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
+        -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
+    }.GetNewClosure()
+  }
+  GentleAi\Resolve-GentleAiPreflight @params
 }
 
 function Get-ConsultingMcpServers {
@@ -1094,7 +1053,8 @@ function Get-GentleAiProjectDiagnostic {
   }
 
   $issues = @()
-  if ($environment.CliCount -gt 1) { $issues += 'multiple-gentle-ai-cli' }
+  if ($environment.CliStatus -eq 'WindowsOriginRejected') { $issues += 'windows-origin-cli' }
+  if ($environment.CliCount -gt 1 -or $environment.CliStatus -eq 'Duplicate') { $issues += 'multiple-gentle-ai-cli' }
   if ($environment.GlobalInstalled -and $environment.WorkspaceInstalled) { $issues += 'global-workspace-duplicate' }
   if ($environment.WorkspaceEngramConfigured) { $issues += 'workspace-engram-mcp' }
   if ($collisions.Count -gt 0) { $issues += 'local-global-skill-collision' }
@@ -1593,6 +1553,7 @@ Export-ModuleMember -Function @(
   'Remove-ConsultingClaudeLayer', 'Get-CommandExecutablePaths', 'Test-McpServerConfigured',
   'Get-GentleAiEnvironment', 'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
   'Resolve-GentleAiScopeDecision', 'Invoke-GentleAiInstall', 'Invoke-SkillRegistryRefresh',
+  'Resolve-GentleAiPreflight', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',

@@ -105,8 +105,22 @@ Describe 'Resolución Gentle AI — caracterización' {
     }
   }
 
-  It 'cancelación por usuario no deja proyecto generado' -Tag 'Interactive' {
-    Set-ItResult -Inconclusive -Because 'known gap: cancelación interactiva requiere mock de Read-ConsultingChoice (Fase 3)'
+  It 'cancelación por usuario no deja proyecto generado' {
+    $ctx = Initialize-CharacterizationContext -FakeHomeFixture 'empty' -WithFakeCommands -SmartGentleAi
+    try {
+      $target = New-CharacterizationTarget -Name 'cancel-no-files' -Context $ctx
+      {
+        Invoke-CharacterizationGenerator -Context $ctx -TargetPath $target -Params @{
+          StackProfile = 'GentleAi'
+          GentleAiScope = 'Auto'
+          ProjectName = 'cancel-me'
+          GentleAiScopeChoice = 'X'
+        }
+      } | Should -Throw '*cancel*'
+      Test-Path -LiteralPath $target | Should -Be $false
+    } finally {
+      Remove-TestSandbox
+    }
   }
 
   It 'CLI ausente + instalación invoca go install' {
@@ -123,7 +137,7 @@ Describe 'Resolución Gentle AI — caracterización' {
 
       Mock Read-ConsultingChoice { return 'I' } -ModuleName ConsultingCopilot
 
-      $result = Ensure-GentleAiCli -Mode Auto
+      $result = Ensure-GentleAiCli -Mode Auto -Choice I
       $result.Available | Should -Be $true
       $result.Path | Should -Not -BeNullOrEmpty
 
@@ -136,7 +150,29 @@ Describe 'Resolución Gentle AI — caracterización' {
 }
 
 Describe 'Fallback ConsultingAI → Consulting' {
-  It 'genera consulting-only cuando el usuario elige fallback' -Tag 'Interactive' {
-    Set-ItResult -Inconclusive -Because 'known gap: fallback interactivo requiere mock de Read-ConsultingChoice (Fase 3)'
+  It 'genera consulting-only cuando el usuario elige fallback' {
+    $ctx = Initialize-CharacterizationContext -FakeHomeFixture 'empty'
+    try {
+      $emptyBin = Join-Path $ctx.Sandbox.Root 'empty-bin'
+      New-Item -ItemType Directory -Path $emptyBin -Force | Out-Null
+      $env:PATH = Get-IsolatedTestPath -FakeBinDir $emptyBin
+
+      $target = New-CharacterizationTarget -Name 'fallback-consulting' -Context $ctx
+      Invoke-CharacterizationGenerator -Context $ctx -TargetPath $target -Params @{
+        StackProfile = 'ConsultingAI'
+        GentleAiScope = 'Auto'
+        ClientDisplayName = 'Cliente'
+        ClientSlug = 'cliente'
+        InitiativeDisplayName = 'Ini'
+        InitiativeId = 'U01'
+        GentleAiCliChoice = 'C'
+      }
+
+      $meta = Get-Content (Join-Path $target '.consulting-engagement.json') -Raw | ConvertFrom-Json
+      $meta.stackProfile | Should -Be 'consulting-only'
+      Test-Path (Join-Path $target '.cursor\agents\cdd-explore.md') | Should -Be $false
+    } finally {
+      Remove-TestSandbox
+    }
   }
 }

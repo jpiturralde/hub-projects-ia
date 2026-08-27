@@ -4,8 +4,8 @@ Defectos o gaps **documentados**, no corregidos en esta fase (según plan).
 
 | ID | Área | Descripción | Test |
 |----|------|-------------|------|
-| KI-01 | Cancelación interactiva | `Read-ConsultingChoice` / `Read-ConsultingPromptYesNo` no mockeados de forma centralizada; cancelar no se caracteriza end-to-end | `GentleAiResolution.Tests.ps1` — Inconclusive |
-| KI-02 | Fallback Consulting | Fallback ConsultingAI→Consulting requiere mock interactivo | `GentleAiResolution.Tests.ps1` — Inconclusive |
+| KI-01 | Cancelación interactiva | ~~Inconclusive~~ — resuelto con `-GentleAiScopeChoice X` / `-Choice` | `GentleAiResolution.Tests.ps1` |
+| KI-02 | Fallback Consulting | ~~Inconclusive~~ — resuelto con `-GentleAiCliChoice C` | `GentleAiResolution.Tests.ps1` |
 | KI-03 | Proyectos legacy | `test-t01` usa schema v2 y `stackProfile: "full"` sin `requestedProfile` | Manual / registry |
 | KI-04 | Staging | ~~Generador escribe directo en `TargetPath`~~ — resuelto en Fase 3 con staging + promoción | `ProjectStaging.Tests.ps1` |
 | KI-05 | `skeleton-minimal/README.md` | Menciona Engram en `.cursor/mcp.json`; política actual lo administra Gentle AI | Docs |
