@@ -1,7 +1,19 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Diagnóstico de prerrequisitos. No instala ni modifica Gentle AI.
+  Preflight / diagnóstico de prerrequisitos. No instala ni modifica Gentle AI.
+
+.DESCRIPTION
+  Conserva el nombre histórico Install-ConsultingCopilot.ps1 por compatibilidad.
+  Comportamiento efectivo: diagnóstico read-only vía Get-ConsultingCopilotPreflightDiagnostic.
+
+.EXAMPLE
+  # Windows
+  pwsh -File .\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI -AsJson
 #>
 [CmdletBinding()]
 param(

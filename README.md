@@ -29,29 +29,33 @@ La documentación oficial confirma que el alcance default es global, que `--scop
 
 ## Uso
 
+Motor único: **PowerShell 7** (`pwsh`) en Windows y Ubuntu/WSL. Catálogo de scripts: [scripts/README.md](scripts/README.md).
+
 ```powershell
-Set-Location "ruta\a\hub-projects-ia\scripts"
+# Windows
+Set-Location "C:\ruta\hub-projects-ia\scripts"
+pwsh -NoProfile -File .\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 
-# Diagnóstico read-only
-.\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
-
-# Default recomendado
-.\New-HubProject.ps1 `
+pwsh -NoProfile -File .\New-HubProject.ps1 `
   -StackProfile ConsultingAI `
   -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
   -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
-
-# Consultoría sin Gentle AI
-.\New-HubProject.ps1 `
-  -StackProfile Consulting `
-  -ClientDisplayName "ACME" -ClientSlug "acme" `
-  -InitiativeDisplayName "Assessment" -InitiativeId "A01"
-
-# Desarrollo
-.\New-HubProject.ps1 -StackProfile GentleAi -ProjectName "mi-app"
 ```
 
-Para automatización puede fijarse `-GentleAiScope Auto|Global|Workspace|Existing`. `Workspace` falla si ya existe global.
+```bash
+# Ubuntu / WSL
+cd /home/usuario/work/hub-projects-ia/scripts
+pwsh -NoProfile -File ./Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
+
+pwsh -NoProfile -File ./New-HubProject.ps1 \
+  -StackProfile Consulting \
+  -ClientDisplayName "ACME" -ClientSlug "acme" \
+  -InitiativeDisplayName "Assessment" -InitiativeId "A01"
+
+pwsh -NoProfile -File ./New-HubProject.ps1 -StackProfile GentleAi -ProjectName "mi-app"
+```
+
+`Install-ConsultingCopilot.ps1` es un **preflight/diagnóstico** (nombre histórico; no instala). Para automatización puede fijarse `-GentleAiScope Auto|Global|Workspace|Existing`. `Workspace` falla si ya existe global.
 
 ## Proyecto generado
 
@@ -69,16 +73,17 @@ Sólo `consulting-copilot.mdc` y `context-budget.mdc` son always-on. Las reglas 
 Tras generar un hijo, validación unificada por perfil:
 
 ```powershell
-.\Test-HubProject.ps1 -TargetPath "..\projects\mi-proyecto" -ExpectedProfile ConsultingAI
+# Windows
+pwsh -File .\Test-HubProject.ps1 -TargetPath "..\projects\mi-proyecto" -ExpectedProfile ConsultingAI
 ```
 
-Para sólo Gentle AI / Engram (duplicación global-workspace, MCP local, colisiones de skills):
-
-```powershell
-.\Test-GentleAiProject.ps1 -TargetPath "D:\clientes\iplan"
+```bash
+# Ubuntu / WSL
+pwsh -File ./Test-HubProject.ps1 -TargetPath ../projects/mi-proyecto -ExpectedProfile ConsultingAI
+pwsh -File ./Test-GentleAiProject.ps1 -TargetPath ../projects/mi-proyecto
 ```
 
-Ambos son read-only. `Test-HubProject.ps1` delega en `Test-GentleAiProject.ps1` salvo con `-SkipGentleAiCheck`. No migran automáticamente.
+Ambos son **read-only** y consumen funciones del módulo (no lanzan scripts hijos que terminen el proceso). `-SkipGentleAiCheck` omite la parte Gentle AI en `Test-HubProject`. No migran automáticamente.
 
 Guía: [docs/MIGRATION-GENTLE-AI.md](docs/MIGRATION-GENTLE-AI.md). Resumen de esta actualización: [docs/CHANGES-2026-08-25.md](docs/CHANGES-2026-08-25.md).
 

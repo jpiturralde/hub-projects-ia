@@ -455,16 +455,16 @@ Objetivo: adaptar los entrypoints sin romper compatibilidad.
 
 Tareas:
 
-- [ ] Adaptar `New-ConsultingCopilotProject.ps1` como generador central.
-- [ ] Adaptar `New-HubProject.ps1` como orquestador.
-- [ ] Adaptar `Refresh-ProjectGettingStarted.ps1` al registry relativo.
-- [ ] Mantener `New-IngeniaTemplateProject.ps1` como alias retrocompatible.
-- [ ] Mantener `New-IngeniaCursorProject.ps1` como alias retrocompatible.
-- [ ] Convertir `Install-ConsultingCopilot.ps1` en diagnóstico/preflight si ese es su comportamiento efectivo, manteniendo compatibilidad de nombre y parámetros.
-- [ ] Hacer `Test-GentleAiProject.ps1` estrictamente read-only.
-- [ ] Hacer `Test-HubProject.ps1` estrictamente read-only y consumir funciones, no ejecutar scripts que terminen el proceso.
-- [ ] Agregar ayuda y ejemplos para Windows y Ubuntu.
-- [ ] Mantener parámetros existentes o proveer aliases/deprecaciones claras.
+- [x] Adaptar `New-ConsultingCopilotProject.ps1` como generador central.
+- [x] Adaptar `New-HubProject.ps1` como orquestador.
+- [x] Adaptar `Refresh-ProjectGettingStarted.ps1` al registry relativo.
+- [x] Mantener `New-IngeniaTemplateProject.ps1` como alias retrocompatible.
+- [x] Mantener `New-IngeniaCursorProject.ps1` como alias retrocompatible.
+- [x] Convertir `Install-ConsultingCopilot.ps1` en diagnóstico/preflight si ese es su comportamiento efectivo, manteniendo compatibilidad de nombre y parámetros.
+- [x] Hacer `Test-GentleAiProject.ps1` estrictamente read-only.
+- [x] Hacer `Test-HubProject.ps1` estrictamente read-only y consumir funciones, no ejecutar scripts que terminen el proceso.
+- [x] Agregar ayuda y ejemplos para Windows y Ubuntu.
+- [x] Mantener parámetros existentes o proveer aliases/deprecaciones claras.
 
 Criterios de salida:
 

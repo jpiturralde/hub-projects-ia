@@ -19,7 +19,9 @@ function Test-GentleAiMcpServerConfigured {
   if (-not (Test-Path -LiteralPath $McpJsonPath -PathType Leaf)) { return $false }
   try {
     $config = Get-Content -LiteralPath $McpJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    return [bool]($config.mcpServers -and $config.mcpServers.PSObject.Properties.Name -contains $ServerName)
+    if (-not $config.mcpServers) { return $false }
+    $names = @($config.mcpServers.PSObject.Properties | ForEach-Object { $_.Name })
+    return $names -contains $ServerName
   } catch { return $false }
 }
 

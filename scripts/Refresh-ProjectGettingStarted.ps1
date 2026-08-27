@@ -7,11 +7,16 @@
   Lee .consulting-engagement.json o .project-profile.json y vuelve a escribir
   GETTING-STARTED sin rutas absolutas ni nombre fijo del hub.
 
-.EXAMPLE
-  .\Refresh-ProjectGettingStarted.ps1 -TargetPath "..\projects\iplan-prev-2142"
+  Con -AllFromRegistry usa hub-registry.json schema v2 (relativePath) y
+  resuelve cada proyecto respecto de la raíz del hub.
 
 .EXAMPLE
-  .\Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
+  # Windows
+  pwsh -File .\Refresh-ProjectGettingStarted.ps1 -TargetPath "..\projects\iplan-prev-2142"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
 #>
 [CmdletBinding()]
 param(

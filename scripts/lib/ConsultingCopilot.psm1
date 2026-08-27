@@ -896,7 +896,8 @@ function Test-HubMoveResult {
     try {
       $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
       $backlog = $null
-      if ($mcp.mcpServers.PSObject.Properties.Name -contains 'backlog') {
+      $mcpNames = @(Get-HubMcpServerNames -McpJsonPath $mcpPath)
+      if ('backlog' -in $mcpNames) {
         $backlog = $mcp.mcpServers.backlog
       }
       if ($backlog -and $backlog.args) {
@@ -1150,7 +1151,9 @@ function Get-HubMcpServerNames {
   if (-not (Test-Path -LiteralPath $McpJsonPath -PathType Leaf)) { return @() }
   $config = Get-Content -LiteralPath $McpJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
   if (-not $config.mcpServers) { return @() }
-  return @($config.mcpServers.PSObject.Properties.Name)
+  $props = @($config.mcpServers.PSObject.Properties)
+  if ($props.Count -eq 0) { return @() }
+  return @($props | ForEach-Object { $_.Name })
 }
 
 function Test-HubProfileUsesGentleAi {

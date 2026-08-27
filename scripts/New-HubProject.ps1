@@ -4,16 +4,25 @@
   Crea un proyecto hijo dentro de projects/ del hub hub-projects-ia.
 
 .DESCRIPTION
-  Wrapper de New-ConsultingCopilotProject.ps1 que:
+  Orquestador canónico. Wrapper de New-ConsultingCopilotProject.ps1 que:
   - Resuelve la ruta absoluta bajo projects/
   - Delega la generación al script base
   - Ejecuta git init en el hijo
-  - Registra el proyecto en hub-registry.json
+  - Registra el proyecto en hub-registry.json (schema v2, relativePath)
+
+  -EngramPath está obsoleto y se ignora (Engram lo administra Gentle AI).
 
 .EXAMPLE
-  .\New-HubProject.ps1 -StackProfile ConsultingAI `
+  # Windows
+  pwsh -File .\New-HubProject.ps1 -StackProfile ConsultingAI `
     -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
     -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./New-HubProject.ps1 -StackProfile Consulting `
+    -ClientDisplayName "ACME" -ClientSlug "acme" `
+    -InitiativeDisplayName "Assessment" -InitiativeId "A01"
 #>
 [CmdletBinding()]
 param(

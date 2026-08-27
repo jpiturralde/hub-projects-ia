@@ -5,13 +5,18 @@
 
 .DESCRIPTION
   Punto de entrada canónico tras New-HubProject.ps1. Valida estructura, metadata,
-  MCP y marcadores por perfil (Consulting, ConsultingAI, GentleAi). Para
-  ConsultingAI y GentleAi incluye diagnóstico Gentle AI composable del módulo.
+  MCP y marcadores por perfil. Incluye diagnóstico Gentle AI vía funciones del
+  módulo (read-only; no ejecuta scripts hijos con exit).
 
   Exit 0 = OK | Exit 2 = fallos detectados
 
 .EXAMPLE
-  .\Test-HubProject.ps1 -TargetPath "..\projects\smokeai-smk02" -ExpectedProfile ConsultingAI
+  # Windows
+  pwsh -File .\Test-HubProject.ps1 -TargetPath "..\projects\iplan-prev-2142" -ExpectedProfile ConsultingAI
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./Test-HubProject.ps1 -TargetPath ../projects/iplan-prev-2142 -ExpectedProfile Auto -AsJson
 #>
 [CmdletBinding()]
 param(

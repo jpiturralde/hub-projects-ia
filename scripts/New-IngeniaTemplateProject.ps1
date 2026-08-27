@@ -4,8 +4,19 @@
   Alias retrocompatible — delega en New-ConsultingCopilotProject.ps1 con perfil ConsultingAI.
 
 .DESCRIPTION
-  Conserva el nombre antiguo para scripts o documentación que aún invoquen New-IngeniaTemplateProject.ps1.
-  Equivalente a: New-ConsultingCopilotProject.ps1 -StackProfile ConsultingAI @args
+  Conserva el nombre antiguo para scripts o documentación que aún invoquen
+  New-IngeniaTemplateProject.ps1.
+
+  Equivalente a:
+    New-ConsultingCopilotProject.ps1 -StackProfile ConsultingAI ...
+
+.EXAMPLE
+  # Windows
+  pwsh -File .\New-IngeniaTemplateProject.ps1 -TargetPath "D:\work\proyecto" -ClientDisplayName "ACME" -ClientSlug "acme" -InitiativeDisplayName "U01" -InitiativeId "U01"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./New-IngeniaTemplateProject.ps1 -TargetPath "/home/user/work/proyecto" -ClientDisplayName "ACME" -ClientSlug "acme" -InitiativeDisplayName "U01" -InitiativeId "U01"
 #>
 [CmdletBinding()]
 param(
@@ -48,6 +59,9 @@ param(
   [Parameter(Mandatory = $false)]
   [string[]] $ArchiMcpArgs,
 
+  [Parameter(Mandatory = $false)]
+  [string] $EngramPath,
+
   [bool] $IncludeDrawioMcp = $true,
   [switch] $IncludeBacklogMcp,
   [switch] $IncludeArchiMcp,
@@ -55,6 +69,8 @@ param(
   [Parameter(Mandatory = $false)]
   [bool] $IncludeClaudeCoworkLayer = $false,
 
+  [switch] $SkipSkillRegistryRefresh,
+  [switch] $SkipHandoffSummary,
   [switch] $Force
 )
 
@@ -64,25 +80,12 @@ if (-not (Test-Path -LiteralPath $main)) {
 }
 
 $params = @{}
-if ($PSBoundParameters.ContainsKey('TargetPath')) { $params['TargetPath'] = $TargetPath }
-$params['GentleAiScope'] = $GentleAiScope
-if ($PSBoundParameters.ContainsKey('ClientDisplayName')) { $params['ClientDisplayName'] = $ClientDisplayName }
-if ($PSBoundParameters.ContainsKey('ClientSlug')) { $params['ClientSlug'] = $ClientSlug }
-if ($PSBoundParameters.ContainsKey('InitiativeDisplayName')) { $params['InitiativeDisplayName'] = $InitiativeDisplayName }
-if ($PSBoundParameters.ContainsKey('InitiativeId')) { $params['InitiativeId'] = $InitiativeId }
-if ($PSBoundParameters.ContainsKey('ConsultancyName')) { $params['ConsultancyName'] = $ConsultancyName }
-if ($PSBoundParameters.ContainsKey('PartnerTeamName') -and -not [string]::IsNullOrWhiteSpace($PartnerTeamName)) {
-  $params['PartnerTeamName'] = $PartnerTeamName.Trim()
+foreach ($key in @($PSBoundParameters.Keys)) {
+  if ($key -eq 'EngramPath') { continue } # obsoleto; el generador advierte si se pasa
+  $params[$key] = $PSBoundParameters[$key]
 }
-if ($PSBoundParameters.ContainsKey('CorporateDocxTemplateName')) { $params['CorporateDocxTemplateName'] = $CorporateDocxTemplateName }
-if ($PSBoundParameters.ContainsKey('ArchimateExportFilename')) { $params['ArchimateExportFilename'] = $ArchimateExportFilename }
-if ($PSBoundParameters.ContainsKey('ArchimateViewsFilename')) { $params['ArchimateViewsFilename'] = $ArchimateViewsFilename }
-if ($PSBoundParameters.ContainsKey('BacklogMcpCwd')) { $params['BacklogMcpCwd'] = $BacklogMcpCwd }
-if ($PSBoundParameters.ContainsKey('ArchiMcpArgs')) { $params['ArchiMcpArgs'] = $ArchiMcpArgs }
-if ($PSBoundParameters.ContainsKey('IncludeDrawioMcp')) { $params['IncludeDrawioMcp'] = $IncludeDrawioMcp }
-if ($PSBoundParameters.ContainsKey('IncludeBacklogMcp')) { $params['IncludeBacklogMcp'] = $IncludeBacklogMcp.IsPresent }
-if ($PSBoundParameters.ContainsKey('IncludeArchiMcp')) { $params['IncludeArchiMcp'] = $IncludeArchiMcp.IsPresent }
-if ($PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) { $params['IncludeClaudeCoworkLayer'] = $IncludeClaudeCoworkLayer }
-if ($PSBoundParameters.ContainsKey('Force')) { $params['Force'] = $Force.IsPresent }
+if ($PSBoundParameters.ContainsKey('EngramPath')) {
+  $params['EngramPath'] = $EngramPath
+}
 
 & $main @params -StackProfile ConsultingAI

@@ -4,8 +4,18 @@
   Diagnóstico read-only de duplicación Gentle AI/Engram y configuración del template.
 
 .DESCRIPTION
-  No elimina ni reescribe archivos administrados. Devuelve código 2 si encuentra
-  un conflicto que debería resolverse antes de regenerar o migrar el proyecto.
+  No elimina ni reescribe archivos administrados. Consume Get-GentleAiProjectDiagnostic
+  del módulo (sin lanzar subprocesos que terminen el proceso).
+
+  Exit 0 = healthy | Exit 2 = issues (solo si el script es el entrypoint).
+
+.EXAMPLE
+  # Windows
+  pwsh -File .\Test-GentleAiProject.ps1 -TargetPath "D:\work\hub-projects-ia\projects\iplan-prev-2142"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./Test-GentleAiProject.ps1 -TargetPath ../projects/iplan-prev-2142 -AsJson
 #>
 [CmdletBinding()]
 param(

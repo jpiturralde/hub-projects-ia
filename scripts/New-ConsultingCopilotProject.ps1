@@ -4,7 +4,7 @@
   Genera proyectos con Gentle AI global-first y perfiles para desarrollo o consultoría.
 
 .DESCRIPTION
-  Perfiles:
+  Generador central del hub. Perfiles:
   - ConsultingAI (default): skeleton de consultoría + Gentle AI + CDD.
   - Full: alias retrocompatible de ConsultingAI.
   - GentleAi: skeleton mínimo orientado a desarrollo.
@@ -13,6 +13,21 @@
   Si existe Gentle AI global, se reutiliza y nunca se ofrece ni ejecuta una
   instalación workspace. La instalación local sólo está disponible cuando no
   existe configuración global.
+
+  -EngramPath está obsoleto y se ignora. Preferí New-HubProject.ps1 para
+  proyectos bajo el hub (git + registry).
+
+.EXAMPLE
+  # Windows
+  pwsh -File .\New-ConsultingCopilotProject.ps1 -TargetPath "D:\work\proyecto" `
+    -StackProfile ConsultingAI -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
+    -InitiativeDisplayName "U01" -InitiativeId "U01"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./New-ConsultingCopilotProject.ps1 -TargetPath "/home/user/work/proyecto" `
+    -StackProfile Consulting -ClientDisplayName "ACME" -ClientSlug "acme" `
+    -InitiativeDisplayName "Assessment" -InitiativeId "A01"
 #>
 [CmdletBinding()]
 param(
