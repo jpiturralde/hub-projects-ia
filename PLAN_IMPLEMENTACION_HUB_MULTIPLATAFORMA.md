@@ -555,6 +555,13 @@ Excluir de la comparación:
 - Cachés.
 - Archivos administrados globalmente.
 
+Tareas:
+
+- [x] Normalizar manifiestos (LF, `/`, `<PROJECT_ROOT>`, timestamps JSON).
+- [x] Contratos golden en `tests/expected/{consulting,consulting-ai,full,gentle-ai}/`.
+- [x] Suite `tests/equivalence` (contrato + determinismo + Full≡ConsultingAI).
+- [x] Documentar diferencias permitidas (`ALLOWED-DIFFS.md`) y regeneración.
+
 Criterios de salida:
 
 - `Consulting`: equivalente en ambas plataformas.
@@ -707,7 +714,7 @@ La implementación estará terminada cuando:
 - [ ] Los scripts multiplataforma no contienen dependencias accidentales de Windows.
 - [x] `Move-HubProjectsIa.ps1` está protegido y documentado como Windows-only.
 - [x] El launcher Bash no duplica lógica de negocio y pasa `shellcheck`.
-- [ ] Los manifiestos normalizados de Windows y Ubuntu son equivalentes.
+- [x] Los manifiestos normalizados de Windows y Ubuntu son equivalentes.
 - [ ] Un piloto descartable fue validado antes de usar la solución sobre IPLAN.
 - [ ] La documentación permite reproducir instalación, pruebas y uso.
 

@@ -142,7 +142,13 @@ function Initialize-CharacterizationContext {
   )
 
   Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'helpers\TestSandbox.psm1') -Force
-  $sandbox = Initialize-TestSandbox -FakeHomeFixture $FakeHomeFixture -WithFakeCommands:$WithFakeCommands -PesterTestDrive $TestDrive
+  $pesterDrive = $null
+  if (Get-Variable -Name TestDrive -Scope 1 -ErrorAction SilentlyContinue) {
+    $pesterDrive = Get-Variable -Name TestDrive -Scope 1 -ValueOnly -ErrorAction SilentlyContinue
+  } elseif (Get-Variable -Name TestDrive -ErrorAction SilentlyContinue) {
+    $pesterDrive = $TestDrive
+  }
+  $sandbox = Initialize-TestSandbox -FakeHomeFixture $FakeHomeFixture -WithFakeCommands:$WithFakeCommands -PesterTestDrive $pesterDrive
   $repoRoot = $sandbox.RepoRoot
   $env:HUB_PROJECTS_IA_ROOT = $repoRoot
 
@@ -204,46 +210,224 @@ function Get-McpServerNamesFromProject {
   $config = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
   if (-not $config.mcpServers) { return @() }
   $names = @($config.mcpServers.PSObject.Properties | ForEach-Object { $_.Name })
-  return @(@($names | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }))
+  return @(@($names | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) | Sort-Object)
+}
+
+function ConvertTo-EquivalenceRelativePath {
+  param([Parameter(Mandatory = $true)][string] $ProjectRoot, [Parameter(Mandatory = $true)][string] $FullPath)
+  $root = [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\', '/')
+  $full = [System.IO.Path]::GetFullPath($FullPath)
+  if ($full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+    $rel = $full.Substring($root.Length).TrimStart('\', '/')
+  } else {
+    $rel = $FullPath
+  }
+  return ($rel -replace '\\', '/')
+}
+
+function Get-EquivalenceNormalizedContent {
+  param(
+    [Parameter(Mandatory = $true)][string] $ProjectRoot,
+    [Parameter(Mandatory = $true)][string] $FilePath
+  )
+  $root = [System.IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\', '/')
+  $rootSlash = $root -replace '\\', '/'
+  $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+  # Quitar BOM UTF-8 si existe.
+  if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    $text = [Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3)
+  } else {
+    $text = [Text.Encoding]::UTF8.GetString($bytes)
+  }
+  $text = $text -replace "`r`n", "`n" -replace "`r", "`n"
+  $text = $text.Replace($root, '<PROJECT_ROOT>').Replace($rootSlash, '<PROJECT_ROOT>')
+  # Variantes Windows drive-letter case.
+  if ($root -match '^[A-Za-z]:') {
+    $alt = $root.Substring(0, 1).ToLowerInvariant() + $root.Substring(1)
+    $text = $text.Replace($alt, '<PROJECT_ROOT>').Replace(($alt -replace '\\', '/'), '<PROJECT_ROOT>')
+  }
+
+  if ([System.IO.Path]::GetExtension($FilePath) -eq '.json') {
+    try {
+      $json = $text | ConvertFrom-Json
+      foreach ($prop in @('generatedAt', 'createdAt', 'installedAt')) {
+        if ($json.PSObject.Properties.Name -contains $prop) {
+          $json.PSObject.Properties.Remove($prop)
+        }
+      }
+      $text = ($json | ConvertTo-Json -Depth 30) -replace "`r`n", "`n" -replace "`r", "`n"
+    } catch { }
+  }
+  return $text
 }
 
 function Get-NormalizedProjectManifest {
   param(
     [Parameter(Mandatory = $true)][string] $ProjectRoot,
-    [string[]] $ExcludePatterns = @('\.git\\', 'onboarding-pending\.json')
+    [string[]] $ExcludePatterns = @('(^|/)\.git(/|$)', 'onboarding-pending\.json', '(^|/)node_modules(/|$)', '(^|/)\.DS_Store$')
   )
 
+  $root = [System.IO.Path]::GetFullPath($ProjectRoot)
   $files = @()
-  Get-ChildItem -LiteralPath $ProjectRoot -Recurse -File -Force | ForEach-Object {
-    $relative = $_.FullName.Substring($ProjectRoot.Length).TrimStart('\', '/')
+  Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object {
+    $relative = ConvertTo-EquivalenceRelativePath -ProjectRoot $root -FullPath $_.FullName
     $skip = $false
     foreach ($pattern in $ExcludePatterns) {
       if ($relative -match $pattern) { $skip = $true; break }
     }
     if ($skip) { return }
 
-    $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-    if ($_.Extension -eq '.json') {
-      try {
-        $json = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($prop in @('generatedAt', 'createdAt')) {
-          if ($json.PSObject.Properties.Name -contains $prop) {
-            $json.PSObject.Properties.Remove($prop)
-          }
-        }
-        $normalized = $json | ConvertTo-Json -Depth 20
-        $bytes = [Text.Encoding]::UTF8.GetBytes($normalized)
-        $stream = [System.IO.MemoryStream]::new($bytes)
-        try {
-          $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash
-        } finally {
-          $stream.Dispose()
-        }
-      } catch { }
+    $normalized = Get-EquivalenceNormalizedContent -ProjectRoot $root -FilePath $_.FullName
+    $bytes = [Text.Encoding]::UTF8.GetBytes($normalized)
+    $stream = [System.IO.MemoryStream]::new($bytes)
+    try {
+      $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash
+    } finally {
+      $stream.Dispose()
     }
     $files += [pscustomobject]@{ Path = $relative; Hash = $hash }
   }
   return @($files | Sort-Object Path)
+}
+
+function Get-EquivalenceProjectSnapshot {
+  param(
+    [Parameter(Mandatory = $true)][string] $ProjectRoot,
+    [string] $ExpectedProfile
+  )
+
+  $root = [System.IO.Path]::GetFullPath($ProjectRoot)
+  $manifest = Get-NormalizedProjectManifest -ProjectRoot $root
+  $mcp = @(Get-McpServerNamesFromProject -ProjectRoot $root)
+
+  $metadata = [ordered]@{}
+  $engagementPath = Join-Path $root '.consulting-engagement.json'
+  $profilePath = Join-Path $root '.project-profile.json'
+  if (Test-Path -LiteralPath $engagementPath) {
+    $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp')) {
+      if ($meta.PSObject.Properties.Name -contains $key) {
+        $metadata[$key] = $meta.$key
+      }
+    }
+  } elseif (Test-Path -LiteralPath $profilePath) {
+    $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope')) {
+      if ($meta.PSObject.Properties.Name -contains $key) {
+        $metadata[$key] = $meta.$key
+      }
+    }
+  }
+
+  $hasPlaceholders = $false
+  try {
+    Test-ConsultingPlaceholders -TargetPath $root
+  } catch {
+    $hasPlaceholders = $true
+  }
+
+  $platform = Get-HubPlatformInfo
+
+  $joined = (@($manifest | ForEach-Object { '{0}:{1}' -f $_.Path, $_.Hash }) -join "`n")
+  $hashBytes = [Text.Encoding]::UTF8.GetBytes($joined)
+  $hashStream = [System.IO.MemoryStream]::new($hashBytes)
+  try {
+    $manifestHash = (Get-FileHash -InputStream $hashStream -Algorithm SHA256).Hash
+  } finally {
+    $hashStream.Dispose()
+  }
+
+  $fingerprints = [ordered]@{}
+  foreach ($item in $manifest) {
+    $fingerprints[$item.Path] = $item.Hash
+  }
+
+  return [ordered]@{
+    schemaVersion = 1
+    expectedProfile = $ExpectedProfile
+    platform = $platform.Platform
+    files = @($manifest | ForEach-Object { $_.Path })
+    fingerprints = $fingerprints
+    mcpServers = $mcp
+    metadata = $metadata
+    gentleAiMarkers = [ordered]@{
+      workspaceGentleAiRule = [bool](Test-Path -LiteralPath (Join-Path $root '.cursor\rules\gentle-ai.mdc'))
+      workspaceCddExplore = [bool](Test-Path -LiteralPath (Join-Path $root '.cursor\agents\cdd-explore.md'))
+      engramInLocalMcp = ($mcp -contains 'engram')
+    }
+    hasUnresolvedPlaceholders = $hasPlaceholders
+    manifestHash = $manifestHash
+  }
+}
+
+function Export-EquivalenceExpectedContract {
+  param(
+    [Parameter(Mandatory = $true)][hashtable] $Snapshot,
+    [Parameter(Mandatory = $true)][string] $OutputPath
+  )
+  # Contrato estable: sin fingerprints ni platform (varían / no aportan al golden cross-OS).
+  $contract = [ordered]@{
+    schemaVersion = 1
+    expectedProfile = $Snapshot.expectedProfile
+    files = @($Snapshot.files)
+    mcpServers = @($Snapshot.mcpServers)
+    metadata = $Snapshot.metadata
+    gentleAiMarkers = $Snapshot.gentleAiMarkers
+    hasUnresolvedPlaceholders = [bool]$Snapshot.hasUnresolvedPlaceholders
+  }
+  $parent = Split-Path -Parent $OutputPath
+  if (-not (Test-Path -LiteralPath $parent)) {
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  }
+  Set-Content -LiteralPath $OutputPath -Value (($contract | ConvertTo-Json -Depth 10) + "`n") -Encoding UTF8
+  return $OutputPath
+}
+
+function Assert-EquivalenceContractMatch {
+  param(
+    [Parameter(Mandatory = $true)]$Snapshot,
+    [Parameter(Mandatory = $true)][string] $ExpectedPath
+  )
+  $expected = Get-Content -LiteralPath $ExpectedPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $errors = [System.Collections.Generic.List[string]]::new()
+
+  if ([string]$Snapshot.expectedProfile -ne [string]$expected.expectedProfile) {
+    $errors.Add("expectedProfile: actual=$($Snapshot.expectedProfile) expected=$($expected.expectedProfile)")
+  }
+  if ([bool]$Snapshot.hasUnresolvedPlaceholders -ne [bool]$expected.hasUnresolvedPlaceholders) {
+    $errors.Add('hasUnresolvedPlaceholders mismatch')
+  }
+
+  $actualFiles = @($Snapshot.files)
+  $expectedFiles = @($expected.files)
+  $onlyActual = @($actualFiles | Where-Object { $_ -notin $expectedFiles })
+  $onlyExpected = @($expectedFiles | Where-Object { $_ -notin $actualFiles })
+  if ($onlyActual.Count -gt 0) { $errors.Add("files only in actual: $($onlyActual -join ', ')") }
+  if ($onlyExpected.Count -gt 0) { $errors.Add("files only in expected: $($onlyExpected -join ', ')") }
+
+  $actualMcp = @($Snapshot.mcpServers)
+  $expectedMcp = @($expected.mcpServers)
+  if (($actualMcp -join ',') -ne ($expectedMcp -join ',')) {
+    $errors.Add("mcpServers: actual=[$($actualMcp -join ',')] expected=[$($expectedMcp -join ',')]")
+  }
+
+  foreach ($prop in @($expected.metadata.PSObject.Properties)) {
+    $actualVal = $Snapshot.metadata[$prop.Name]
+    if ("$actualVal" -ne "$($prop.Value)") {
+      $errors.Add("metadata.$($prop.Name): actual=$actualVal expected=$($prop.Value)")
+    }
+  }
+  foreach ($prop in @($expected.gentleAiMarkers.PSObject.Properties)) {
+    $actualVal = $Snapshot.gentleAiMarkers[$prop.Name]
+    if ([bool]$actualVal -ne [bool]$prop.Value) {
+      $errors.Add("gentleAiMarkers.$($prop.Name): actual=$actualVal expected=$($prop.Value)")
+    }
+  }
+
+  return [pscustomobject]@{
+    Ok = ($errors.Count -eq 0)
+    Errors = @($errors)
+  }
 }
 
 function Compare-ProjectManifests {
@@ -252,13 +436,13 @@ function Compare-ProjectManifests {
     [Parameter(Mandatory = $true)][object[]] $Right
   )
   $leftMap = @{}
-  foreach ($item in $Left) { $leftMap[$item.Path] = $item.Hash }
+  foreach ($item in $Left) { $leftMap[$item.Path -replace '\\', '/'] = $item.Hash }
   $rightMap = @{}
-  foreach ($item in $Right) { $rightMap[$item.Path] = $item.Hash }
+  foreach ($item in $Right) { $rightMap[$item.Path -replace '\\', '/'] = $item.Hash }
 
-  $onlyLeft = @($leftMap.Keys | Where-Object { -not $rightMap.ContainsKey($_) })
-  $onlyRight = @($rightMap.Keys | Where-Object { -not $leftMap.ContainsKey($_) })
-  $hashDiff = @($leftMap.Keys | Where-Object { $rightMap.ContainsKey($_) -and $leftMap[$_] -ne $rightMap[$_] })
+  $onlyLeft = @($leftMap.Keys | Where-Object { -not $rightMap.ContainsKey($_) } | Sort-Object)
+  $onlyRight = @($rightMap.Keys | Where-Object { -not $leftMap.ContainsKey($_) } | Sort-Object)
+  $hashDiff = @($leftMap.Keys | Where-Object { $rightMap.ContainsKey($_) -and $leftMap[$_] -ne $rightMap[$_] } | Sort-Object)
 
   return [pscustomobject]@{
     OnlyLeft = $onlyLeft

@@ -30,6 +30,7 @@ O por carpeta:
 ```powershell
 Invoke-Pester ./tests/unit
 Invoke-Pester ./tests/characterization   # Fase 2 — perfiles y resolución GA
+Invoke-Pester ./tests/equivalence        # Fase 10 — manifiestos normalizados
 Invoke-Pester ./tests
 ```
 
@@ -39,10 +40,14 @@ Invoke-Pester ./tests
 |------|-----------|
 | `helpers/TestSandbox.psm1` | Sandbox temporal: fake HOME, fake hub, PATH aislado |
 | `helpers/FakeCommand.ps1` | Generador de ejecutables fake con log JSON |
-| `helpers/TestProjectFactory.ps1` | Utilidades para proyectos temporales |
+| `helpers/CharacterizationHelpers.ps1` | Generación aislada + manifiestos de equivalencia |
 | `fixtures/fake-home/` | Árboles `.cursor` / `.gentle-ai` de referencia |
 | `fixtures/minimal-hub/` | Hub mínimo para tests de registry/layout |
 | `unit/` | Tests unitarios y humo del harness |
+| `characterization/` | Contratos por perfil |
+| `integration/` | Entrypoints y launcher |
+| `equivalence/` | Manifiestos normalizados cross-plataforma |
+| `expected/` | Contratos golden por perfil |
 
 ## Variables de entorno (tests)
 

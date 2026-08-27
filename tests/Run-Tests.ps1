@@ -11,6 +11,7 @@ $paths = @(
   (Join-Path $testsRoot 'unit')
   (Join-Path $testsRoot 'characterization')
   (Join-Path $testsRoot 'integration')
+  (Join-Path $testsRoot 'equivalence')
   (Join-Path $testsRoot 'ConsultingCopilot.Tests.ps1')
   (Join-Path $testsRoot 'Move-HubProjectsIa.Tests.ps1')
 ) | Where-Object { Test-Path -LiteralPath $_ }
