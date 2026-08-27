@@ -1,0 +1,101 @@
+{
+  "startedAt": "2026-08-27T18:37:42.3457251+00:00",
+  "platform": "Wsl",
+  "doctorOk": true,
+  "projects": [
+    {
+      "profile": "Consulting",
+      "folder": "pilot-hubmp-consulting",
+      "path": "<HUB_ROOT>/projects/pilot-hubmp-consulting",
+      "gitInitialized": true,
+      "gettingStarted": true,
+      "diagnosticHealthy": true,
+      "diagnosticIssues": [],
+      "contractOk": true,
+      "contractErrors": [],
+      "engramInLocalMcp": false,
+      "metadata": {
+        "schemaVersion": 3,
+        "stackProfile": "consulting-only",
+        "requestedProfile": "Consulting",
+        "engramMcpSource": "none",
+        "gentleAiScope": "none",
+        "includeDrawioMcp": false,
+        "includeBacklogMcp": false,
+        "includeArchiMcp": false
+      }
+    },
+    {
+      "profile": "ConsultingAI",
+      "folder": "pilot-hubmp-consultingai",
+      "path": "<HUB_ROOT>/projects/pilot-hubmp-consultingai",
+      "gitInitialized": true,
+      "gettingStarted": true,
+      "diagnosticHealthy": true,
+      "diagnosticIssues": [],
+      "contractOk": true,
+      "contractErrors": [],
+      "engramInLocalMcp": false,
+      "metadata": {
+        "schemaVersion": 3,
+        "stackProfile": "consulting-ai",
+        "requestedProfile": "ConsultingAI",
+        "engramMcpSource": "gentle-ai-managed",
+        "gentleAiScope": "global",
+        "includeDrawioMcp": false,
+        "includeBacklogMcp": false,
+        "includeArchiMcp": false
+      }
+    },
+    {
+      "profile": "Full",
+      "folder": "pilot-hubmp-full",
+      "path": "<HUB_ROOT>/projects/pilot-hubmp-full",
+      "gitInitialized": true,
+      "gettingStarted": true,
+      "diagnosticHealthy": true,
+      "diagnosticIssues": [],
+      "contractOk": true,
+      "contractErrors": [],
+      "engramInLocalMcp": false,
+      "metadata": {
+        "schemaVersion": 3,
+        "stackProfile": "consulting-ai",
+        "requestedProfile": "Full",
+        "engramMcpSource": "gentle-ai-managed",
+        "gentleAiScope": "global",
+        "includeDrawioMcp": false,
+        "includeBacklogMcp": false,
+        "includeArchiMcp": false
+      }
+    },
+    {
+      "profile": "GentleAi",
+      "folder": "pilot-hubmp-gentleai",
+      "path": "<HUB_ROOT>/projects/pilot-hubmp-gentleai",
+      "gitInitialized": true,
+      "gettingStarted": true,
+      "diagnosticHealthy": true,
+      "diagnosticIssues": [],
+      "contractOk": true,
+      "contractErrors": [],
+      "engramInLocalMcp": false,
+      "metadata": {
+        "schemaVersion": 3,
+        "stackProfile": "gentle-ai-only",
+        "projectName": "equiv-app",
+        "gentleAiScope": "global"
+      }
+    }
+  ],
+  "sentinelOk": true,
+  "cleaned": true,
+  "findings": [
+    "doctor: Gentle AI CLI único + global OK",
+    "sentinels globales sin cambios (mcp.json / gentle-ai state / gentle-ai.mdc)",
+    "registry: 4 entradas piloto con relativePath",
+    "limpieza: proyectos piloto eliminados y registry restaurado"
+  ],
+  "finishedAt": "2026-08-27T18:37:51.5023013+00:00",
+  "success": true
+}

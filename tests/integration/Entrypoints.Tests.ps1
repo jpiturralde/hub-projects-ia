@@ -36,6 +36,12 @@ Describe 'Entrypoints públicos Fase 7' {
     $ga | Should -Match 'Get-GentleAiProjectDiagnostic'
     $hub | Should -Not -Match 'Test-GentleAiProject\.ps1'
   }
+
+  It 'New-HubProject usa Read-HubRegistry (no Get-HubRegistry obsoleto)' {
+    $src = Get-Content -LiteralPath (Join-Path $script:scriptsRoot 'New-HubProject.ps1') -Raw
+    $src | Should -Match 'Read-HubRegistry'
+    $src | Should -Not -Match 'Get-HubRegistry\s+-Path'
+  }
 }
 
 Describe 'Diagnósticos read-only' {

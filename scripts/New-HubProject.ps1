@@ -180,9 +180,9 @@ if (-not $TargetPath.StartsWith($ProjectsRoot, [StringComparison]::OrdinalIgnore
   Write-Warning "TargetPath fuera de projects/: $TargetPath. El gitignore del hub no lo excluirá automáticamente."
 }
 
-$registryPreview = Get-HubRegistry -Path $RegistryPath
-if ($registryPreview.projects) {
-  $dup = @($registryPreview.projects | Where-Object { $_.folderName -eq $folderName })
+$registryPreview = Read-HubRegistry -HubRoot $HubRoot -RegistryPath $RegistryPath
+if ($registryPreview.Projects) {
+  $dup = @($registryPreview.Projects | Where-Object { $_.FolderName -eq $folderName })
   if ($dup.Count -gt 0 -and -not $Force) {
     throw "Ya existe un proyecto registrado con folderName '$folderName'. Usá -Force para regenerar o elegí otro nombre."
   }

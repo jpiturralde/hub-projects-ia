@@ -576,20 +576,26 @@ Objetivo: validar en un caso real sin arriesgar un proyecto importante.
 
 Tareas:
 
-- [ ] Crear un proyecto piloto descartable fuera de IPLAN, GIRE y otros proyectos activos.
-- [ ] Ejecutar `doctor` antes de crear.
-- [ ] Probar cada perfil en directorios separados.
-- [ ] Verificar Git, registry, onboarding y apertura de Cursor.
-- [ ] Confirmar que Gentle AI/Engram globales fueron reutilizados y no modificados.
-- [ ] Ejecutar diagnósticos después de crear.
-- [ ] Comparar el piloto con los expected manifests.
-- [ ] Documentar hallazgos y corregir mediante tests de regresión.
+- [x] Crear un proyecto piloto descartable fuera de IPLAN, GIRE y otros proyectos activos.
+- [x] Ejecutar `doctor` antes de crear.
+- [x] Probar cada perfil en directorios separados.
+- [x] Verificar Git, registry, onboarding y apertura de Cursor.
+- [x] Confirmar que Gentle AI/Engram globales fueron reutilizados y no modificados.
+- [x] Ejecutar diagnósticos después de crear.
+- [x] Comparar el piloto con los expected manifests.
+- [x] Documentar hallazgos y corregir mediante tests de regresión.
 
 Criterios de salida:
 
 - Piloto exitoso en Ubuntu/WSL.
 - Piloto equivalente en Windows.
 - Ningún cambio inesperado en configuraciones globales.
+
+Notas:
+
+- Runner reproducible: `tests/equivalence/Invoke-HubPilot.ps1`.
+- Informe: `docs/PILOT-HUB-MULTIPLATFORM.md` (+ JSON).
+- Windows nativo: pendiente de repetición manual; equivalencia de artefactos cubierta por Fase 10.
 
 ### Fase 12 — Documentación y cierre
 
