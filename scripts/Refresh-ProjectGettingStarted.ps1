@@ -7,11 +7,16 @@
   Lee .consulting-engagement.json o .project-profile.json y vuelve a escribir
   GETTING-STARTED sin rutas absolutas ni nombre fijo del hub.
 
-.EXAMPLE
-  .\Refresh-ProjectGettingStarted.ps1 -TargetPath "..\projects\iplan-prev-2142"
+  Con -AllFromRegistry usa hub-registry.json schema v2 (relativePath) y
+  resuelve cada proyecto respecto de la raíz del hub.
 
 .EXAMPLE
-  .\Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
+  # Windows
+  pwsh -File .\Refresh-ProjectGettingStarted.ps1 -TargetPath "..\projects\iplan-prev-2142"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
 #>
 [CmdletBinding()]
 param(
@@ -25,27 +30,36 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$hubRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-Import-Module (Join-Path $hubRoot 'scripts\lib\ConsultingCopilot.psm1') -Force
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'Platform.psm1') -Force
+Import-Module (Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1') -Force
+
+$hubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 
 function Invoke-RefreshOne {
   param([string] $Path)
   $resolved = [System.IO.Path]::GetFullPath($Path)
+  if (-not (Test-Path -LiteralPath $resolved -PathType Container)) {
+    Write-Warning "Proyecto no encontrado (se omite): $resolved"
+    return
+  }
   $output = Update-ProjectGettingStartedFromMetadata -TargetPath $resolved
   Write-Host "OK $output"
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'Registry') {
-  $registryPath = Join-Path $hubRoot 'hub-registry.json'
-  if (-not (Test-Path -LiteralPath $registryPath)) {
-    throw "No se encontró hub-registry.json en: $registryPath"
+  $registry = Read-HubRegistry -HubRoot $hubRoot
+  foreach ($item in @($registry.Projects)) {
+    if ($item.ResolveError) {
+      Write-Warning "No se pudo resolver $($item.FolderName): $($item.ResolveError)"
+      continue
+    }
+    if (-not $item.Exists) {
+      Write-Warning "Proyecto registrado no encontrado ($($item.FolderName)): $($item.ResolvedPath)"
+      continue
+    }
+    Invoke-RefreshOne -Path $item.ResolvedPath
   }
-  $registry = Get-Content -LiteralPath $registryPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  foreach ($project in @($registry.projects)) {
-    if (-not $project.absolutePath) { continue }
-    Invoke-RefreshOne -Path ([string]$project.absolutePath)
-  }
-  exit 0
+  return
 }
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {

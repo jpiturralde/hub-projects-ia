@@ -4,16 +4,25 @@
   Crea un proyecto hijo dentro de projects/ del hub hub-projects-ia.
 
 .DESCRIPTION
-  Wrapper de New-ConsultingCopilotProject.ps1 que:
+  Orquestador canónico. Wrapper de New-ConsultingCopilotProject.ps1 que:
   - Resuelve la ruta absoluta bajo projects/
   - Delega la generación al script base
   - Ejecuta git init en el hijo
-  - Registra el proyecto en hub-registry.json
+  - Registra el proyecto en hub-registry.json (schema v2, relativePath)
+
+  -EngramPath está obsoleto y se ignora (Engram lo administra Gentle AI).
 
 .EXAMPLE
-  .\New-HubProject.ps1 -StackProfile ConsultingAI `
+  # Windows
+  pwsh -File .\New-HubProject.ps1 -StackProfile ConsultingAI `
     -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
     -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+
+.EXAMPLE
+  # Ubuntu/WSL
+  pwsh -File ./New-HubProject.ps1 -StackProfile Consulting `
+    -ClientDisplayName "ACME" -ClientSlug "acme" `
+    -InitiativeDisplayName "Assessment" -InitiativeId "A01"
 #>
 [CmdletBinding()]
 param(
@@ -82,28 +91,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ModulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
+$ModulePath = Join-Path (Join-Path $PSScriptRoot 'lib') 'ConsultingCopilot.psm1'
 Import-Module $ModulePath -Force
 
-$HubRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$HubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 $ProjectsRoot = Join-Path $HubRoot 'projects'
-$RegistryPath = Join-Path $HubRoot 'hub-registry.json'
+$RegistryPath = Get-HubRegistryPath -HubRoot $HubRoot
 $GeneratorScript = Join-Path $PSScriptRoot 'New-ConsultingCopilotProject.ps1'
 
 if (-not (Test-Path -LiteralPath $ProjectsRoot)) {
   New-Item -ItemType Directory -Path $ProjectsRoot -Force | Out-Null
-}
-
-function Get-HubRegistry {
-  param([string] $Path)
-  if (-not (Test-Path -LiteralPath $Path)) {
-    return [ordered]@{ schemaVersion = 1; projects = @() }
-  }
-  $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
-  if ([string]::IsNullOrWhiteSpace($raw)) {
-    return [ordered]@{ schemaVersion = 1; projects = @() }
-  }
-  return ($raw | ConvertFrom-Json)
 }
 
 function Resolve-HubProjectFolderName {
@@ -152,26 +149,7 @@ function Add-HubRegistryEntry {
     [string] $RegistryFile,
     [hashtable] $Entry
   )
-
-  $registry = Get-HubRegistry -Path $RegistryFile
-  $projects = @()
-  if ($registry.projects) {
-    $projects = @($registry.projects)
-  }
-
-  $existing = $projects | Where-Object { $_.folderName -eq $Entry.folderName }
-  if ($existing -and -not $Force) {
-    throw "folderName ya registrado en hub-registry.json: $($Entry.folderName). Usá -Force si querés regenerar."
-  }
-
-  $projects = @($projects | Where-Object { $_.folderName -ne $Entry.folderName })
-  $projects += [pscustomobject]$Entry
-
-  $out = [ordered]@{
-    schemaVersion = 1
-    projects      = $projects
-  }
-  ($out | ConvertTo-Json -Depth 6) + "`n" | Set-Content -LiteralPath $RegistryFile -Encoding UTF8
+  Add-HubRegistryProject -HubRoot $HubRoot -Entry $Entry -RegistryPath $RegistryFile -Force:$Force | Out-Null
 }
 
 if ([string]::IsNullOrWhiteSpace($StackProfile)) {
@@ -202,9 +180,9 @@ if (-not $TargetPath.StartsWith($ProjectsRoot, [StringComparison]::OrdinalIgnore
   Write-Warning "TargetPath fuera de projects/: $TargetPath. El gitignore del hub no lo excluirá automáticamente."
 }
 
-$registryPreview = Get-HubRegistry -Path $RegistryPath
-if ($registryPreview.projects) {
-  $dup = @($registryPreview.projects | Where-Object { $_.folderName -eq $folderName })
+$registryPreview = Read-HubRegistry -HubRoot $HubRoot -RegistryPath $RegistryPath
+if ($registryPreview.Projects) {
+  $dup = @($registryPreview.Projects | Where-Object { $_.FolderName -eq $folderName })
   if ($dup.Count -gt 0 -and -not $Force) {
     throw "Ya existe un proyecto registrado con folderName '$folderName'. Usá -Force para regenerar o elegí otro nombre."
   }
@@ -291,7 +269,7 @@ if (Test-Path -LiteralPath $generatedMetaPath) {
 
 $entry = [ordered]@{
   folderName     = $folderName
-  absolutePath   = $TargetPath
+  relativePath   = "projects/$folderName"
   stackProfile   = $registryProfile
   createdAt      = (Get-Date).ToString('o')
   gitInitialized = $gitInitialized

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "expectedProfile": "GentleAi",
+  "files": [
+    ".cursor/commands/start-task.md",
+    ".cursor/rules/context-budget.mdc",
+    ".cursor/rules/onboarding.mdc",
+    ".cursor/skills/onboarding/SKILL.md",
+    ".cursorignore",
+    ".gitignore",
+    ".project-profile.json",
+    "docs/GETTING-STARTED.md",
+    "PROJECT-CONTEXT.md",
+    "README.md"
+  ],
+  "mcpServers": [],
+  "metadata": {
+    "schemaVersion": 3,
+    "stackProfile": "gentle-ai-only",
+    "projectName": "equiv-app",
+    "gentleAiScope": "global"
+  },
+  "gentleAiMarkers": {
+    "workspaceGentleAiRule": false,
+    "workspaceCddExplore": false,
+    "engramInLocalMcp": false
+  },
+  "hasUnresolvedPlaceholders": false
+}
+

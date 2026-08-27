@@ -1,18 +1,28 @@
 # Flujo de trabajo — Hub Projects IA
 
+Motor único: **PowerShell 7** (`pwsh`) en Windows y Ubuntu/WSL. Guía completa: [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md). Entrypoints: [scripts/README.md](scripts/README.md).
+
 ## 1. Diagnosticar
 
 ```powershell
-Set-Location "ruta\a\hub-projects-ia\scripts"
-.\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
+# Windows
+Set-Location "C:\ruta\hub-projects-ia\scripts"
+pwsh -NoProfile -File .\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 ```
 
-El diagnóstico es read-only. Si hay varios ejecutables o global + workspace, corregir primero; el generador no toca archivos administrados.
+```bash
+# Ubuntu / WSL
+cd /home/usuario/work/hub-projects-ia
+./scripts/hub doctor -StackProfile ConsultingAI
+# equivalente: pwsh -File ./scripts/Install-ConsultingCopilot.ps1 ...
+```
+
+El diagnóstico es read-only (nombre histórico `Install-*`; no instala). Si hay varios ejecutables o global + workspace, corregir primero; el generador no toca archivos administrados.
 
 ## 2. Generar
 
 ```powershell
-.\New-HubProject.ps1 `
+pwsh -NoProfile -File .\New-HubProject.ps1 `
   -StackProfile ConsultingAI `
   -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
   -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
@@ -61,8 +71,13 @@ CDD guarda el contenido completo en `.cdd/changes/` y memoria resumida en Engram
 ## 7. Diagnosticar un hijo existente
 
 ```powershell
-.\Test-GentleAiProject.ps1 -TargetPath "D:\clientes\iplan"
+# Windows
+pwsh -File .\Test-HubProject.ps1 -TargetPath "..\projects\iplan-prev-2142" -ExpectedProfile ConsultingAI
+```
+
+```bash
+# Ubuntu / WSL
+pwsh -File ./Test-GentleAiProject.ps1 -TargetPath ../projects/iplan-prev-2142
 ```
 
 El resultado no aplica migraciones. Cualquier corrección de Gentle AI debe hacerse con comandos administrados y revisión previa.
-

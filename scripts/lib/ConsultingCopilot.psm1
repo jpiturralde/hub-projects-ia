@@ -1,5 +1,9 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 Set-StrictMode -Version Latest
+
+Import-Module (Join-Path $PSScriptRoot 'Platform.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'GentleAi.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'HubRegistry.psm1') -Force
 
 $script:TextExtensions = @(
   '.md', '.mdc', '.json', '.lua', '.yml', '.yaml', '.xml', '.drawio', '.gitignore', '.ps1', '.puml', '.mdx'
@@ -44,22 +48,63 @@ function Read-ConsultingChoice {
   }
 }
 
-function Test-ConsultingTargetPath {
+function Resolve-ConsultingFinalTargetPath {
   param([string] $TargetPath, [switch] $Force)
   if ([string]::IsNullOrWhiteSpace($TargetPath)) { throw 'TargetPath es obligatorio.' }
   $TargetPath = $TargetPath.Trim()
   if (-not [System.IO.Path]::IsPathRooted($TargetPath)) {
     throw "TargetPath debe ser una ruta absoluta. Recibido: $TargetPath"
   }
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
   if (Test-Path -LiteralPath $TargetPath) {
     $any = Get-ChildItem -LiteralPath $TargetPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($any -and -not $Force) {
       throw "La carpeta destino no está vacía. Vaciala o usá -Force. Ruta: $TargetPath"
     }
-  } else {
+  }
+  return $TargetPath
+}
+
+function Test-ConsultingTargetPath {
+  param([string] $TargetPath, [switch] $Force, [switch] $CreateIfMissing)
+  $TargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force
+  if (-not (Test-Path -LiteralPath $TargetPath) -and $CreateIfMissing) {
     New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
   }
   return $TargetPath
+}
+
+function New-ConsultingProjectStagingPath {
+  $stagingName = 'hub-project-staging-{0}' -f [Guid]::NewGuid().ToString('N')
+  $stagingPath = Join-Path ([System.IO.Path]::GetTempPath()) $stagingName
+  New-Item -ItemType Directory -Path $stagingPath -Force | Out-Null
+  return $stagingPath
+}
+
+function Promote-ConsultingProjectStaging {
+  param([string] $StagingPath, [string] $TargetPath, [switch] $Force)
+  if ([string]::IsNullOrWhiteSpace($StagingPath) -or -not (Test-Path -LiteralPath $StagingPath)) {
+    throw "Staging inválido o inexistente: $StagingPath"
+  }
+  $TargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force
+  $parent = Split-Path -Parent $TargetPath
+  if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  }
+  if (Test-Path -LiteralPath $TargetPath) {
+    if (-not $Force) { throw "El destino final ya existe: $TargetPath" }
+    Remove-Item -LiteralPath $TargetPath -Recurse -Force
+  }
+  Move-Item -LiteralPath $StagingPath -Destination $TargetPath
+  return $TargetPath
+}
+
+function Remove-ConsultingProjectStaging {
+  param([string] $StagingPath)
+  if ([string]::IsNullOrWhiteSpace($StagingPath)) { return }
+  if (Test-Path -LiteralPath $StagingPath) {
+    Remove-Item -LiteralPath $StagingPath -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Copy-ConsultingSkeleton {
@@ -130,157 +175,136 @@ function Remove-ConsultingClaudeLayer {
 }
 
 function Get-CommandExecutablePaths {
-  param([string] $Name)
-  $paths = @()
-  Get-Command $Name -All -ErrorAction SilentlyContinue | ForEach-Object {
-    $candidate = if ($_.Path) { $_.Path } elseif ($_.Source) { $_.Source } else { $null }
-    if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-      $paths += [System.IO.Path]::GetFullPath($candidate)
-    }
-  }
-  return @($paths | Sort-Object -Unique)
+  param([string] $Name, [switch] $AllowWindowsExecutable)
+  return Get-HubCommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable
 }
 
 function Test-McpServerConfigured {
   param([string] $McpJsonPath, [string] $ServerName)
-  if (-not (Test-Path -LiteralPath $McpJsonPath -PathType Leaf)) { return $false }
-  try {
-    $config = Get-Content -LiteralPath $McpJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    return [bool]($config.mcpServers -and $config.mcpServers.PSObject.Properties.Name -contains $ServerName)
-  } catch { return $false }
+  return Test-GentleAiMcpServerConfigured -McpJsonPath $McpJsonPath -ServerName $ServerName
 }
 
-function Get-GentleAiEnvironment {
-  param([string] $TargetPath, [string] $UserHome = [Environment]::GetFolderPath('UserProfile'))
-  $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  $globalRule = Join-Path $UserHome '.cursor\rules\gentle-ai.mdc'
-  $globalState = Join-Path $UserHome '.gentle-ai\state.json'
-  $globalMcp = Join-Path $UserHome '.cursor\mcp.json'
-  $globalMarkers = @(
-    $globalRule,
-    (Join-Path $UserHome '.cursor\agents\sdd-init.md'),
-    (Join-Path $UserHome '.cursor\skills\sdd-init\SKILL.md')
-  )
-  $stateMentionsCursor = $false
-  if (Test-Path -LiteralPath $globalState -PathType Leaf) {
-    try { $stateMentionsCursor = (Get-Content -LiteralPath $globalState -Raw -Encoding UTF8) -match '(?i)"cursor"' }
-    catch { $stateMentionsCursor = $false }
-  }
-  $workspaceMarkers = @()
-  $workspaceMcp = $null
-  if (-not [string]::IsNullOrWhiteSpace($TargetPath)) {
-    $workspaceMarkers = @(
-      (Join-Path $TargetPath '.cursor\rules\gentle-ai.mdc'),
-      (Join-Path $TargetPath '.cursor\agents\sdd-init.md'),
-      (Join-Path $TargetPath '.cursor\skills\sdd-init\SKILL.md')
-    )
-    $workspaceMcp = Join-Path $TargetPath '.cursor\mcp.json'
-  }
-  $existingWorkspaceMarkers = @($workspaceMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-  $existingGlobalMarkers = @($globalMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-  return [pscustomobject]@{
-    CliPaths = $cliPaths; CliCount = $cliPaths.Count
-    CliPath = if ($cliPaths.Count -eq 1) { $cliPaths[0] } else { $null }
-    GlobalInstalled = ($existingGlobalMarkers.Count -gt 0) -or $stateMentionsCursor
-    GlobalMarkerPaths = $existingGlobalMarkers
-    GlobalRulePath = $globalRule; GlobalStatePath = $globalState
-    GlobalStateExists = Test-Path -LiteralPath $globalState -PathType Leaf
-    GlobalMcpPath = $globalMcp
-    GlobalEngramConfigured = Test-McpServerConfigured -McpJsonPath $globalMcp -ServerName 'engram'
-    WorkspaceInstalled = $existingWorkspaceMarkers.Count -gt 0
-    WorkspaceMarkerPaths = $existingWorkspaceMarkers; WorkspaceMcpPath = $workspaceMcp
-    WorkspaceEngramConfigured = if ($workspaceMcp) { Test-McpServerConfigured -McpJsonPath $workspaceMcp -ServerName 'engram' } else { $false }
-  }
+function Get-ConsultingUserHome {
+  param([string] $UserHome)
+  return Get-GentleAiUserHome -UserHome $UserHome
 }
 
-function Install-GentleAiCliStable {
-  $goPaths = @(Get-CommandExecutablePaths -Name 'go')
-  if ($goPaths.Count -ne 1) {
-    throw 'Para instalar Gentle AI estable se requiere una única instalación de Go en PATH. Instalá Go 1.25.10+ y volvé a ejecutar.'
+function Get-HubProjectsIaRoot {
+  param([string] $ScriptRoot)
+  if (-not [string]::IsNullOrWhiteSpace($env:HUB_PROJECTS_IA_ROOT)) {
+    return Resolve-HubRootPath $env:HUB_PROJECTS_IA_ROOT
   }
-  Write-Host 'Instalando Gentle AI estable con Go...'
-  & $goPaths[0] install github.com/gentleman-programming/gentle-ai/v2/cmd/gentle-ai@latest
-  if ($LASTEXITCODE -ne 0) { throw "La instalación de gentle-ai falló con código $LASTEXITCODE." }
-  $goPath = (& $goPaths[0] env GOPATH | Select-Object -First 1).Trim()
-  if ($goPath) {
-    $binPath = Join-Path $goPath 'bin'
-    if (($env:PATH -split [System.IO.Path]::PathSeparator) -notcontains $binPath) {
-      $env:PATH = "$binPath$([System.IO.Path]::PathSeparator)$env:PATH"
-    }
+  if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
+    throw 'ScriptRoot es obligatorio cuando HUB_PROJECTS_IA_ROOT no está definido.'
   }
-  $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  if ($cliPaths.Count -ne 1) {
-    throw "La instalación terminó pero se detectaron $($cliPaths.Count) ejecutables de gentle-ai. Revisá PATH:`n$($cliPaths -join "`n")"
-  }
-  return $cliPaths[0]
+  return Resolve-HubProjectsRootFromScript -ScriptRoot $ScriptRoot
 }
 
 function Ensure-GentleAiCli {
-  param([ValidateSet('Auto', 'Existing')] [string] $Mode = 'Auto', [switch] $AllowConsultingFallback)
-  $paths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-  if ($paths.Count -gt 1) {
-    throw "Se detectaron varias instalaciones de gentle-ai. Conservá una sola en PATH:`n$($paths -join "`n")"
+  param(
+    [ValidateSet('Auto', 'Existing')] [string] $Mode = 'Auto',
+    [switch] $AllowConsultingFallback,
+    [string] $Choice
+  )
+  $params = @{
+    Mode = $Mode
+    AllowConsultingFallback = $AllowConsultingFallback
   }
-  if ($paths.Count -eq 1) { return [pscustomobject]@{ Available = $true; Path = $paths[0]; FallbackToConsulting = $false } }
-  if ($Mode -eq 'Existing') { throw 'gentle-ai no está en PATH y se solicitó usar una instalación existente.' }
-  $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
-  if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
-  $choice = Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
-  if ($choice -eq 'X') { throw 'Operación cancelada por el usuario antes de generar archivos.' }
-  if ($choice -eq 'C') { return [pscustomobject]@{ Available = $false; Path = $null; FallbackToConsulting = $true } }
-  $path = Install-GentleAiCliStable
-  return [pscustomobject]@{ Available = $true; Path = $path; FallbackToConsulting = $false }
+  if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+    $params['Choice'] = $Choice
+  } else {
+    $params['PromptChoice'] = {
+      $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
+      if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
+      Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
+    }.GetNewClosure()
+  }
+  $result = GentleAi\Ensure-GentleAiCli @params
+  if ($result.Status -eq 'Cancelled') {
+    throw 'Operación cancelada por el usuario antes de generar archivos.'
+  }
+  return $result
 }
 
 function Resolve-GentleAiScopeDecision {
-  param([psobject] $Environment, [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto')
-  if ($Environment.CliCount -gt 1) { throw "Se detectaron varias instalaciones de gentle-ai:`n$($Environment.CliPaths -join "`n")" }
-  if ($Environment.GlobalInstalled -and $Environment.WorkspaceInstalled) {
-    throw 'Se detectó Gentle AI global y también en el workspace. No se modificará nada automáticamente. Ejecutá el diagnóstico y corregí la duplicación con comandos administrados por Gentle AI.'
+  param(
+    [psobject] $Environment,
+    [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto',
+    [string] $Choice
+  )
+  $params = @{
+    Environment = $Environment
+    RequestedScope = $RequestedScope
   }
-  if ($Environment.GlobalInstalled) {
-    if ($RequestedScope -eq 'Workspace') { throw 'No se permite Gentle AI local porque ya existe configuración global.' }
-    return [pscustomobject]@{ Action = 'Reuse'; Scope = 'Global'; Reason = 'global-existing' }
+  if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+    $params['Choice'] = $Choice
+  } elseif ($RequestedScope -eq 'Auto' -and -not $Environment.GlobalInstalled -and -not $Environment.WorkspaceInstalled) {
+    $params['PromptChoice'] = {
+      Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
+        -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
+    }
   }
-  if ($Environment.WorkspaceInstalled) {
-    if ($RequestedScope -eq 'Global') { throw 'El workspace ya contiene Gentle AI; no se instalará otra copia global automáticamente.' }
-    return [pscustomobject]@{ Action = 'Reuse'; Scope = 'Workspace'; Reason = 'workspace-existing' }
+  $decision = GentleAi\Resolve-GentleAiScopeDecision @params
+  if ($decision.Status -eq 'Cancelled') {
+    throw 'Operación cancelada antes de instalar Gentle AI.'
   }
-  if ($RequestedScope -eq 'Existing') { throw 'No se encontró una configuración Gentle AI existente para Cursor.' }
-  if ($RequestedScope -eq 'Global') { return [pscustomobject]@{ Action = 'Install'; Scope = 'Global'; Reason = 'explicit-global' } }
-  if ($RequestedScope -eq 'Workspace') { return [pscustomobject]@{ Action = 'Install'; Scope = 'Workspace'; Reason = 'explicit-workspace' } }
-  $choice = Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
-    -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
-  if ($choice -eq 'X') { throw 'Operación cancelada antes de instalar Gentle AI.' }
-  $scope = if ($choice -eq 'G') { 'Global' } else { 'Workspace' }
-  return [pscustomobject]@{ Action = 'Install'; Scope = $scope; Reason = 'interactive-choice' }
+  return $decision
 }
 
+function Get-GentleAiEnvironment {
+  param([string] $TargetPath, [string] $UserHome)
+  GentleAi\Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
+}
+
+function Install-GentleAiCliStable { GentleAi\Install-GentleAiCliStable }
 function Invoke-GentleAiInstall {
-  param([string] $CliPath, [ValidateSet('Global', 'Workspace')] [string] $Scope, [string] $TargetPath)
-  if (-not (Test-Path -LiteralPath $CliPath -PathType Leaf)) { throw "gentle-ai no encontrado: $CliPath" }
-  if ($Scope -eq 'Workspace' -and [string]::IsNullOrWhiteSpace($TargetPath)) { throw 'Workspace requiere TargetPath.' }
-  $workingPath = if ($Scope -eq 'Workspace') { $TargetPath } else { [Environment]::GetFolderPath('UserProfile') }
-  Write-Host "Configurando Gentle AI para Cursor con alcance $Scope..."
-  Push-Location $workingPath
-  try {
-    & $CliPath install --agent cursor --scope $Scope.ToLowerInvariant() --component engram,sdd,skills
-    if ($LASTEXITCODE -ne 0) { throw "gentle-ai install falló con código $LASTEXITCODE." }
-  } finally { Pop-Location }
+  param(
+    [string] $CliPath,
+    [ValidateSet('Global', 'Workspace')] [string] $Scope,
+    [string] $TargetPath,
+    [string] $UserHome
+  )
+  GentleAi\Invoke-GentleAiInstall -CliPath $CliPath -Scope $Scope -TargetPath $TargetPath -UserHome $UserHome
 }
-
 function Invoke-SkillRegistryRefresh {
   param([string] $TargetPath, [string] $CliPath)
-  if ([string]::IsNullOrWhiteSpace($CliPath)) {
-    $paths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
-    if ($paths.Count -ne 1) { Write-Warning 'No hay un único gentle-ai en PATH; se omite skill-registry refresh.'; return }
-    $CliPath = $paths[0]
+  GentleAi\Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $CliPath
+}
+function Resolve-GentleAiPreflight {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [ValidateSet('Auto', 'Global', 'Workspace', 'Existing')] [string] $RequestedScope = 'Auto',
+    [ValidateSet('Auto', 'Existing')] [string] $CliMode = 'Auto',
+    [switch] $AllowConsultingFallback,
+    [string] $CliChoice,
+    [string] $ScopeChoice,
+    [string] $UserHome
+  )
+  $params = @{
+    TargetPath = $TargetPath
+    RequestedScope = $RequestedScope
+    CliMode = $CliMode
+    AllowConsultingFallback = $AllowConsultingFallback
+    UserHome = $UserHome
   }
-  Push-Location $TargetPath
-  try {
-    & $CliPath skill-registry refresh --force
-    if ($LASTEXITCODE -ne 0) { Write-Warning "skill-registry refresh terminó con código $LASTEXITCODE." }
-  } finally { Pop-Location }
+  if (-not [string]::IsNullOrWhiteSpace($CliChoice)) {
+    $params['CliChoice'] = $CliChoice
+  } else {
+    $params['PromptCliChoice'] = {
+      $choices = [ordered]@{ I = 'instalar estable (recomendado)'; X = 'cancelar' }
+      if ($AllowConsultingFallback) { $choices['C'] = 'continuar con perfil Consulting sin Gentle AI' }
+      Read-ConsultingChoice -Message 'Gentle AI es requerido y no se encontró el CLI' -Choices $choices -DefaultKey 'I'
+    }.GetNewClosure()
+  }
+  if (-not [string]::IsNullOrWhiteSpace($ScopeChoice)) {
+    $params['ScopeChoice'] = $ScopeChoice
+  } elseif ($RequestedScope -eq 'Auto') {
+    $params['PromptScopeChoice'] = {
+      Read-ConsultingChoice -Message 'No existe configuración global de Gentle AI. Elegí dónde instalarla' `
+        -Choices ([ordered]@{ G = 'global (recomendado)'; P = 'solo en este proyecto'; X = 'cancelar' }) -DefaultKey 'G'
+    }.GetNewClosure()
+  }
+  GentleAi\Resolve-GentleAiPreflight @params
 }
 
 function Get-ConsultingMcpServers {
@@ -567,21 +591,21 @@ Si creaste este proyecto desde un **hub generador**, el trabajo del encargo (SPE
 
 function Copy-ProjectOnboardingLayer {
   param([string] $SourceRoot, [string] $TargetPath)
-  $ruleSrc = Join-Path $SourceRoot 'skeleton\.cursor\rules\onboarding.mdc'
-  $skillSrc = Join-Path $SourceRoot 'skeleton\.cursor\skills\onboarding'
-  $ruleDestDir = Join-Path $TargetPath '.cursor\rules'
-  $skillDestDir = Join-Path $TargetPath '.cursor\skills\onboarding'
+  $ruleSrc = Join-HubPath $SourceRoot 'skeleton' '.cursor' 'rules' 'onboarding.mdc'
+  $skillSrc = Join-HubPath $SourceRoot 'skeleton' '.cursor' 'skills' 'onboarding'
+  $ruleDestDir = Join-HubPath $TargetPath '.cursor' 'rules'
+  $skillDestDir = Join-HubPath $TargetPath '.cursor' 'skills' 'onboarding'
   if (-not (Test-Path -LiteralPath $ruleDestDir)) { New-Item -ItemType Directory -Path $ruleDestDir -Force | Out-Null }
   if (Test-Path -LiteralPath $ruleSrc) { Copy-Item -LiteralPath $ruleSrc -Destination $ruleDestDir -Force }
   if (Test-Path -LiteralPath $skillSrc) {
     if (-not (Test-Path -LiteralPath $skillDestDir)) { New-Item -ItemType Directory -Path $skillDestDir -Force | Out-Null }
-    Copy-Item -LiteralPath (Join-Path $skillSrc '*') -Destination $skillDestDir -Recurse -Force
+    Get-ChildItem -LiteralPath $skillSrc -Force | Copy-Item -Destination $skillDestDir -Recurse -Force
   }
 }
 
 function Invoke-OpenCursorWorkspace {
   param([string] $TargetPath)
-  $paths = @(Get-CommandExecutablePaths -Name 'cursor')
+  $paths = @(Get-CommandExecutablePaths -Name 'cursor' -AllowWindowsExecutable)
   if ($paths.Count -ne 1) { Write-Warning "Abrí manualmente en Cursor: $TargetPath"; return $false }
   & $paths[0] $TargetPath
   return $LASTEXITCODE -eq 0
@@ -598,8 +622,7 @@ function Write-ProjectHandoffSummary {
 
 function Resolve-HubRootPath {
   param([Parameter(Mandatory = $true)][string] $Path)
-  if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Path vacío.' }
-  return [System.IO.Path]::GetFullPath($Path.Trim().TrimEnd('\', '/'))
+  Platform\Resolve-HubRootPath -Path $Path
 }
 
 function Test-HubPathIsChildOf {
@@ -607,20 +630,16 @@ function Test-HubPathIsChildOf {
     [Parameter(Mandatory = $true)][string] $ChildPath,
     [Parameter(Mandatory = $true)][string] $ParentPath
   )
-  $child = Resolve-HubRootPath $ChildPath
-  $parent = Resolve-HubRootPath $ParentPath
-  if ($child.Length -le $parent.Length) { return $false }
-  $sep = [System.IO.Path]::DirectorySeparatorChar
-  return $child.StartsWith($parent + $sep, [StringComparison]::OrdinalIgnoreCase)
+  Platform\Test-HubPathIsChildOf -ChildPath $ChildPath -ParentPath $ParentPath
 }
 
 function Test-HubRootLayout {
   param([Parameter(Mandatory = $true)][string] $HubRoot)
   $resolved = Resolve-HubRootPath $HubRoot
   $markers = @(
-    (Join-Path $resolved 'hub-registry.json'),
-    (Join-Path $resolved 'scripts\New-HubProject.ps1'),
-    (Join-Path $resolved 'skeleton')
+    (Join-HubPath $resolved 'hub-registry.json'),
+    (Join-HubPath $resolved 'scripts' 'New-HubProject.ps1'),
+    (Join-HubPath $resolved 'skeleton')
   )
   return @($markers | Where-Object { -not (Test-Path -LiteralPath $_) })
 }
@@ -739,37 +758,51 @@ function Update-HubRegistryPaths {
     [Parameter(Mandatory = $true)][string] $OldHubRoot
   )
 
-  $registryPath = Join-Path $HubRoot 'hub-registry.json'
+  $registryPath = Get-HubRegistryPath -HubRoot $HubRoot
   if (-not (Test-Path -LiteralPath $registryPath)) {
     return [pscustomobject]@{ Updated = $false; Path = $registryPath; ProjectCount = 0 }
   }
 
   $hub = Resolve-HubRootPath $HubRoot
   $oldHub = Resolve-HubRootPath $OldHubRoot
-  $raw = [System.IO.File]::ReadAllText($registryPath, [System.Text.UTF8Encoding]::new($false))
-  $registry = $raw | ConvertFrom-Json
-  $projects = @($registry.projects)
+  $current = Read-HubRegistry -HubRoot $HubRoot -RegistryPath $registryPath
+  $projects = [System.Collections.Generic.List[object]]::new()
   $updatedCount = 0
 
-  foreach ($project in $projects) {
-    if (-not $project.absolutePath) { continue }
-    $current = [string]$project.absolutePath
-    if ($current.StartsWith($oldHub, [StringComparison]::OrdinalIgnoreCase)) {
-      $suffix = $current.Substring($oldHub.Length)
-      $project.absolutePath = $hub + $suffix
-      $updatedCount++
+  foreach ($item in @($current.Projects)) {
+    $entry = $item.Entry
+    # Schema v2 relativo: no cambia al mover el hub.
+    if ($entry.PSObject.Properties.Name -contains 'relativePath' -and -not [string]::IsNullOrWhiteSpace([string]$entry.relativePath)) {
+      $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project $entry -ExternalPolicy KeepExternal
+      $projects.Add($migrated.Project) | Out-Null
+      continue
     }
+    if ($entry.PSObject.Properties.Name -contains 'absolutePath' -and -not [string]::IsNullOrWhiteSpace([string]$entry.absolutePath)) {
+      $currentPath = [string]$entry.absolutePath
+      $map = @{}
+      foreach ($prop in @($entry.PSObject.Properties)) { $map[$prop.Name] = $prop.Value }
+      if ($currentPath.StartsWith($oldHub, [StringComparison]::OrdinalIgnoreCase)) {
+        $suffix = $currentPath.Substring($oldHub.Length)
+        $map['absolutePath'] = $hub + $suffix
+        $updatedCount++
+      }
+      $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project ([pscustomobject]$map) -ExternalPolicy KeepExternal
+      $projects.Add($migrated.Project) | Out-Null
+      $updatedCount++
+      continue
+    }
+    $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project $entry -ExternalPolicy KeepExternal
+    $projects.Add($migrated.Project) | Out-Null
   }
 
-  if ($updatedCount -gt 0) {
-    $json = ($registry | ConvertTo-Json -Depth 8) + "`n"
-    [System.IO.File]::WriteAllText($registryPath, $json, [System.Text.UTF8Encoding]::new($false))
-  }
+  $document = New-HubRegistryDocument -SchemaVersion 2 -Projects @($projects)
+  Write-HubRegistry -RegistryPath $registryPath -Document $document | Out-Null
 
   return [pscustomobject]@{
-    Updated = ($updatedCount -gt 0)
+    Updated = $true
     Path = $registryPath
     ProjectCount = $updatedCount
+    SchemaVersion = 2
   }
 }
 
@@ -789,7 +822,7 @@ function Update-HubChildMcpPaths {
   }
 
   foreach ($projectDir in @(Get-ChildItem -LiteralPath $projectsRoot -Directory -ErrorAction SilentlyContinue)) {
-    $mcpPath = Join-Path $projectDir.FullName '.cursor\mcp.json'
+    $mcpPath = Join-HubPath $projectDir.FullName '.cursor' 'mcp.json'
     if (-not (Test-Path -LiteralPath $mcpPath -PathType Leaf)) { continue }
 
     $raw = [System.IO.File]::ReadAllText($mcpPath, [System.Text.UTF8Encoding]::new($false))
@@ -837,30 +870,34 @@ function Test-HubMoveResult {
     $issues.Add("Estructura del hub incompleta. Falta: $missing")
   }
 
-  $registryPath = Join-Path $hub 'hub-registry.json'
+  $registryPath = Get-HubRegistryPath -HubRoot $hub
   if (-not (Test-Path -LiteralPath $registryPath)) {
     $issues.Add('No se encontró hub-registry.json.')
     return [pscustomobject]@{ Ok = $false; HubRoot = $hub; Issues = @($issues) }
   }
 
-  $registry = Get-Content -LiteralPath $registryPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  foreach ($project in @($registry.projects)) {
-    if (-not $project.absolutePath) { continue }
-    $projectPath = [string]$project.absolutePath
-    if (-not $projectPath.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
-      $issues.Add("absolutePath fuera del hub ($($project.folderName)): $projectPath")
+  $registry = Read-HubRegistry -HubRoot $hub -RegistryPath $registryPath
+  foreach ($item in @($registry.Projects)) {
+    if ($item.ResolveError) {
+      $issues.Add("No se pudo resolver ($($item.FolderName)): $($item.ResolveError)")
+      continue
     }
-    if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) {
-      $issues.Add("Proyecto registrado no encontrado ($($project.folderName)): $projectPath")
+    $projectPath = $item.ResolvedPath
+    if (-not (Test-HubPathIsChildOf -ChildPath $projectPath -ParentPath $hub) -and -not (Compare-HubPath -Left $projectPath -Right $hub)) {
+      $issues.Add("Ruta de proyecto fuera del hub ($($item.FolderName)): $projectPath")
+    }
+    if (-not $item.Exists) {
+      $issues.Add("Proyecto registrado no encontrado ($($item.FolderName)): $projectPath")
     }
 
-    $mcpPath = Join-Path $projectPath '.cursor\mcp.json'
+    $mcpPath = Join-HubPath $projectPath '.cursor' 'mcp.json'
     if (-not (Test-Path -LiteralPath $mcpPath)) { continue }
 
     try {
       $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
       $backlog = $null
-      if ($mcp.mcpServers.PSObject.Properties.Name -contains 'backlog') {
+      $mcpNames = @(Get-HubMcpServerNames -McpJsonPath $mcpPath)
+      if ('backlog' -in $mcpNames) {
         $backlog = $mcp.mcpServers.backlog
       }
       if ($backlog -and $backlog.args) {
@@ -869,17 +906,16 @@ function Test-HubMoveResult {
           if ($backlogArgs[$i] -eq '--cwd' -and ($i + 1) -lt $backlogArgs.Count) {
             $cwd = [string]$backlogArgs[$i + 1]
             if ($cwd -and -not (Test-Path -LiteralPath $cwd -PathType Container)) {
-              $issues.Add("Backlog MCP --cwd inválido ($($project.folderName)): $cwd")
+              $issues.Add("Backlog MCP --cwd inválido ($($item.FolderName)): $cwd")
             }
-            elseif ($cwd -and -not $cwd.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
-              $issues.Add("Backlog MCP --cwd fuera del hub ($($project.folderName)): $cwd")
+            elseif ($cwd -and -not ((Test-HubPathIsChildOf -ChildPath $cwd -ParentPath $hub) -or (Compare-HubPath -Left $cwd -Right $hub))) {
+              $issues.Add("Backlog MCP --cwd fuera del hub ($($item.FolderName)): $cwd")
             }
           }
         }
       }
-    }
-    catch {
-      $issues.Add("mcp.json inválido ($($project.folderName)): $mcpPath")
+    } catch {
+      $issues.Add("MCP inválido ($($item.FolderName)): $($_.Exception.Message)")
     }
   }
 
@@ -896,6 +932,8 @@ function New-HubMoveBackup {
     [Parameter(Mandatory = $true)][string] $BackupPath
   )
 
+  Assert-HubWindowsNativeHost -OperationName 'New-HubMoveBackup'
+
   if (Test-Path -LiteralPath $BackupPath) {
     throw "Ya existe el destino de backup: $BackupPath"
   }
@@ -907,6 +945,7 @@ function New-HubMoveBackup {
     New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
   }
 
+  # robocopy es Windows-only; sin él (raro en Windows) se usa Copy-Item.
   $robocopy = Get-Command robocopy.exe -ErrorAction SilentlyContinue
   if ($robocopy) {
     & robocopy.exe $source $backup /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -930,6 +969,8 @@ function Move-HubRootDirectory {
     [Parameter(Mandatory = $true)][string] $DestinationPath
   )
 
+  Assert-HubWindowsNativeHost -OperationName 'Move-HubRootDirectory'
+
   $source = Resolve-HubRootPath $SourcePath
   $destination = Resolve-HubRootPath $DestinationPath
   $destParent = Split-Path -Parent $destination
@@ -952,6 +993,11 @@ function Invoke-HubRelocate {
     [switch] $SkipBackup,
     [switch] $WhatIf
   )
+
+  # WhatIf puede planear en cualquier OS (sin escrituras). La ejecución real es Windows-only.
+  if (-not $WhatIf) {
+    Assert-HubWindowsNativeHost -OperationName 'Invoke-HubRelocate'
+  }
 
   $precheck = Test-HubMovePreconditions -SourcePath $SourcePath -DestinationPath $DestinationPath
   if (-not $precheck.Ok) {
@@ -1000,13 +1046,586 @@ function Invoke-HubRelocate {
   }
 }
 
+function Get-GentleAiProjectDiagnostic {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [string] $UserHome
+  )
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
+  if (-not (Test-Path -LiteralPath $TargetPath -PathType Container)) {
+    throw "Proyecto no encontrado: $TargetPath"
+  }
+
+  $environment = Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
+  $userHomeResolved = Get-ConsultingUserHome -UserHome $UserHome
+  $localSkillsRoot = Join-HubPath $TargetPath '.cursor' 'skills'
+  $globalSkillsRoot = Join-HubPath $userHomeResolved '.cursor' 'skills'
+  $skillCollisionExclude = @('_shared')
+  $collisions = @()
+  if ((Test-Path -LiteralPath $localSkillsRoot) -and (Test-Path -LiteralPath $globalSkillsRoot)) {
+    $localNames = @(Get-ChildItem -LiteralPath $localSkillsRoot -Directory -Force | ForEach-Object { $_.Name })
+    $globalNames = @(Get-ChildItem -LiteralPath $globalSkillsRoot -Directory -Force | ForEach-Object { $_.Name })
+    $collisions = @($localNames | Where-Object {
+      $_ -notin $skillCollisionExclude -and ($globalNames -contains $_)
+    } | Sort-Object -Unique)
+  }
+
+  $alwaysApply = @()
+  $rulesRoot = Join-HubPath $TargetPath '.cursor' 'rules'
+  if (Test-Path -LiteralPath $rulesRoot) {
+    Get-ChildItem -LiteralPath $rulesRoot -Filter '*.mdc' -File -Force | ForEach-Object {
+      if ((Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8) -match '(?m)^alwaysApply:\s*true\s*$') {
+        $alwaysApply += $_.Name
+      }
+    }
+  }
+
+  $issues = @()
+  if ($environment.CliStatus -eq 'WindowsOriginRejected') { $issues += 'windows-origin-cli' }
+  if ($environment.CliCount -gt 1 -or $environment.CliStatus -eq 'Duplicate') { $issues += 'multiple-gentle-ai-cli' }
+  if ($environment.GlobalInstalled -and $environment.WorkspaceInstalled) { $issues += 'global-workspace-duplicate' }
+  if ($environment.WorkspaceEngramConfigured) { $issues += 'workspace-engram-mcp' }
+  if ($collisions.Count -gt 0) { $issues += 'local-global-skill-collision' }
+  if (@($alwaysApply | Where-Object { $_ -notin @('consulting-copilot.mdc', 'context-budget.mdc') }).Count -gt 0) {
+    $issues += 'excessive-always-apply-rules'
+  }
+
+  return [pscustomobject]@{
+    targetPath = $TargetPath
+    cliPaths = @($environment.CliPaths)
+    globalGentleAi = [bool]$environment.GlobalInstalled
+    workspaceGentleAi = [bool]$environment.WorkspaceInstalled
+    globalEngramMcp = [bool]$environment.GlobalEngramConfigured
+    workspaceEngramMcp = [bool]$environment.WorkspaceEngramConfigured
+    skillCollisions = @($collisions)
+    alwaysApplyRules = @($alwaysApply)
+    issues = @($issues)
+    healthy = $issues.Count -eq 0
+    remediation = @(
+      'No edites ni borres manualmente archivos administrados por Gentle AI.',
+      'Usá gentle-ai doctor como primer diagnóstico.',
+      'Si actualizaste el binario, usá gentle-ai sync.',
+      'Revisá el dry-run del instalador antes de cualquier cambio de alcance.'
+    )
+  }
+}
+
+function Write-GentleAiProjectDiagnostic {
+  param([Parameter(Mandatory = $true)] $Result)
+  Write-Host "Proyecto: $($Result.targetPath)"
+  Write-Host "Gentle AI global: $($Result.globalGentleAi) | workspace: $($Result.workspaceGentleAi)"
+  Write-Host "Engram MCP global: $($Result.globalEngramMcp) | workspace: $($Result.workspaceEngramMcp)"
+  Write-Host "CLI: $($Result.cliPaths -join '; ')"
+  Write-Host "Skills local/global repetidas: $($Result.skillCollisions -join ', ')"
+  Write-Host "Reglas alwaysApply: $($Result.alwaysApplyRules -join ', ')"
+  if ($Result.healthy) { Write-Host 'Resultado: OK' -ForegroundColor Green }
+  else { Write-Host "Resultado: revisar $($Result.issues -join ', ')" -ForegroundColor Yellow }
+}
+
+function Get-HubProjectProfileFromRoot {
+  param([string] $Root)
+  $projectProfile = Join-Path $Root '.project-profile.json'
+  $engagementMeta = Join-Path $Root '.consulting-engagement.json'
+
+  if (Test-Path -LiteralPath $projectProfile) {
+    $meta = Get-Content -LiteralPath $projectProfile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($meta.stackProfile -eq 'gentle-ai-only') { return 'GentleAi' }
+  }
+
+  if (Test-Path -LiteralPath $engagementMeta) {
+    $meta = Get-Content -LiteralPath $engagementMeta -Raw -Encoding UTF8 | ConvertFrom-Json
+    switch ($meta.stackProfile) {
+      'consulting-only' { return 'Consulting' }
+      'consulting-ai' { return 'ConsultingAI' }
+      default { return [string]$meta.stackProfile }
+    }
+  }
+
+  return 'Unknown'
+}
+
+function Test-HubDiagnosticPathExists {
+  param([string] $Path, [string] $Label)
+  if (-not (Test-Path -LiteralPath $Path)) { return "missing-$Label" }
+  return $null
+}
+
+function Test-HubDiagnosticPathAbsent {
+  param([string] $Path, [string] $Label)
+  if (Test-Path -LiteralPath $Path) { return "unexpected-$Label" }
+  return $null
+}
+
+function Get-HubMcpServerNames {
+  param([string] $McpJsonPath)
+  if (-not (Test-Path -LiteralPath $McpJsonPath -PathType Leaf)) { return @() }
+  $config = Get-Content -LiteralPath $McpJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  if (-not $config.mcpServers) { return @() }
+  $props = @($config.mcpServers.PSObject.Properties)
+  if ($props.Count -eq 0) { return @() }
+  return @($props | ForEach-Object { $_.Name })
+}
+
+function Test-HubProfileUsesGentleAi {
+  param([string] $Profile)
+  return $Profile -in @('ConsultingAI', 'GentleAi')
+}
+
+function Test-HubCommonStructureChecks {
+  param([string] $Root)
+  $issues = @()
+  try {
+    Test-ConsultingPlaceholders -TargetPath $Root
+  } catch {
+    $issues += 'unresolved-placeholders'
+  }
+
+  foreach ($pair in @(
+    @{ Path = (Join-HubPath $Root 'docs' 'GETTING-STARTED.md'); Label = 'getting-started' }
+    @{ Path = (Join-Path $Root 'PROJECT-CONTEXT.md'); Label = 'project-context' }
+  )) {
+    $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
+    if ($issue) { $issues += $issue }
+  }
+
+  return $issues
+}
+
+function Test-HubConsultingBaseStructureChecks {
+  param(
+    [string] $Root,
+    [object] $EngagementMeta
+  )
+  $issues = @()
+  $mcpPath = Join-HubPath $Root '.cursor' 'mcp.json'
+
+  foreach ($pair in @(
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
+    @{ Path = (Join-HubPath $Root '.atl' 'stack-profile.json'); Label = 'stack-profile-config' }
+    @{ Path = $mcpPath; Label = 'mcp-json' }
+  )) {
+    $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
+    if ($issue) { $issues += $issue }
+  }
+
+  $issue = Test-HubDiagnosticPathAbsent -Path (Join-HubPath $Root '.cursor' 'rules' 'gentle-ai.mdc') -Label 'gentle-ai-rule'
+  if ($issue) { $issues += $issue }
+
+  $servers = Get-HubMcpServerNames -McpJsonPath $mcpPath
+  if ($EngagementMeta.includeDrawioMcp -and 'drawio' -notin $servers) { $issues += 'missing-mcp-drawio' }
+  if ($EngagementMeta.includeBacklogMcp -and 'backlog' -notin $servers) { $issues += 'missing-mcp-backlog' }
+  if ($EngagementMeta.includeArchiMcp -and 'archi' -notin $servers) { $issues += 'missing-mcp-archi' }
+  if ('engram' -in $servers) { $issues += 'workspace-engram-mcp' }
+
+  return $issues
+}
+
+function Test-HubConsultingStructureChecks {
+  param(
+    [string] $Root,
+    [object] $EngagementMeta
+  )
+  $issues = Test-HubConsultingBaseStructureChecks -Root $Root -EngagementMeta $EngagementMeta
+  if ($EngagementMeta.stackProfile -ne 'consulting-only') { $issues += 'wrong-stack-profile' }
+  $issue = Test-HubDiagnosticPathAbsent -Path (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md') -Label 'cdd-overlay'
+  if ($issue) { $issues += $issue }
+  return $issues
+}
+
+function Test-HubConsultingAiStructureChecks {
+  param(
+    [string] $Root,
+    [object] $EngagementMeta
+  )
+  $issues = Test-HubConsultingBaseStructureChecks -Root $Root -EngagementMeta $EngagementMeta
+  if ($EngagementMeta.stackProfile -ne 'consulting-ai') { $issues += 'wrong-stack-profile' }
+
+  foreach ($pair in @(
+    @{ Path = (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md'); Label = 'cdd-explore-agent' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'gentle-ai-consulting.mdc'); Label = 'gentle-ai-consulting-rule' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'skills' 'consulting-driven-delivery' 'SKILL.md'); Label = 'cdd-skill' }
+  )) {
+    $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
+    if ($issue) { $issues += $issue }
+  }
+
+  if ($EngagementMeta.engramMcpSource -ne 'gentle-ai-managed') { $issues += 'unexpected-engram-source' }
+  return $issues
+}
+
+function Test-HubGentleAiStructureChecks {
+  param(
+    [string] $Root,
+    [object] $ProjectMeta
+  )
+  $issues = @()
+  $mcpPath = Join-HubPath $Root '.cursor' 'mcp.json'
+
+  if ($ProjectMeta.stackProfile -ne 'gentle-ai-only') { $issues += 'wrong-stack-profile' }
+
+  foreach ($pair in @(
+    @{ Path = (Join-HubPath $Root '.cursor' 'skills' 'onboarding' 'SKILL.md'); Label = 'onboarding-skill' }
+    @{ Path = (Join-Path $Root 'README.md'); Label = 'readme' }
+  )) {
+    $issue = Test-HubDiagnosticPathExists -Path $pair.Path -Label $pair.Label
+    if ($issue) { $issues += $issue }
+  }
+
+  foreach ($pair in @(
+    @{ Path = (Join-Path $Root '.consulting-engagement.json'); Label = 'consulting-engagement' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'rules' 'consulting-copilot.mdc'); Label = 'consulting-copilot-rule' }
+    @{ Path = (Join-HubPath $Root '.cursor' 'agents' 'cdd-explore.md'); Label = 'cdd-overlay' }
+  )) {
+    $issue = Test-HubDiagnosticPathAbsent -Path $pair.Path -Label $pair.Label
+    if ($issue) { $issues += $issue }
+  }
+
+  if (Test-Path -LiteralPath $mcpPath) {
+    $servers = Get-HubMcpServerNames -McpJsonPath $mcpPath
+    if ('engram' -in $servers) { $issues += 'workspace-engram-mcp' }
+  }
+
+  return $issues
+}
+
+function Get-HubProjectDiagnostic {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [ValidateSet('Consulting', 'ConsultingAI', 'GentleAi', 'Auto')]
+    [string] $ExpectedProfile = 'Auto',
+    [switch] $SkipGentleAiCheck,
+    [string] $UserHome
+  )
+
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
+  if (-not (Test-Path -LiteralPath $TargetPath -PathType Container)) {
+    throw "Proyecto no encontrado: $TargetPath"
+  }
+
+  $profile = Get-HubProjectProfileFromRoot -Root $TargetPath
+  $structureIssues = Test-HubCommonStructureChecks -Root $TargetPath
+
+  $engagementMeta = $null
+  $projectMeta = $null
+  $engagementPath = Join-Path $TargetPath '.consulting-engagement.json'
+  $projectProfilePath = Join-Path $TargetPath '.project-profile.json'
+
+  if (Test-Path -LiteralPath $engagementPath) {
+    $engagementMeta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  if (Test-Path -LiteralPath $projectProfilePath) {
+    $projectMeta = Get-Content -LiteralPath $projectProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+
+  switch ($profile) {
+    'Consulting' {
+      if (-not $engagementMeta) { $structureIssues += 'missing-engagement-metadata' }
+      else { $structureIssues += Test-HubConsultingStructureChecks -Root $TargetPath -EngagementMeta $engagementMeta }
+    }
+    'ConsultingAI' {
+      if (-not $engagementMeta) { $structureIssues += 'missing-engagement-metadata' }
+      else { $structureIssues += Test-HubConsultingAiStructureChecks -Root $TargetPath -EngagementMeta $engagementMeta }
+    }
+    'GentleAi' {
+      if (-not $projectMeta) { $structureIssues += 'missing-project-profile' }
+      else { $structureIssues += Test-HubGentleAiStructureChecks -Root $TargetPath -ProjectMeta $projectMeta }
+    }
+    default { $structureIssues += 'unknown-profile' }
+  }
+
+  if ($ExpectedProfile -ne 'Auto' -and $profile -ne $ExpectedProfile) {
+    $structureIssues += "profile-mismatch-expected-$ExpectedProfile-got-$profile"
+  }
+
+  $structureIssues = @($structureIssues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+  $structureHealthy = $structureIssues.Count -eq 0
+
+  $gentleAiResult = $null
+  $gentleAiIssues = @()
+  $runGentleAiCheck = (Test-HubProfileUsesGentleAi -Profile $profile) -and -not $SkipGentleAiCheck
+
+  if ($runGentleAiCheck) {
+    $gentleAiResult = Get-GentleAiProjectDiagnostic -TargetPath $TargetPath -UserHome $UserHome
+    $gentleAiIssues = @($gentleAiResult.issues)
+  }
+
+  $issues = @($structureIssues)
+  if ($runGentleAiCheck -and -not [bool]$gentleAiResult.healthy) {
+    $issues += @($gentleAiIssues | ForEach-Object { "gentle-ai:$_" })
+  }
+  $issues = @($issues | Select-Object -Unique)
+
+  return [pscustomobject]@{
+    targetPath = $TargetPath
+    profile = $profile
+    expectedProfile = $ExpectedProfile
+    structureCheck = [pscustomobject]@{
+      healthy = $structureHealthy
+      issues = @($structureIssues)
+    }
+    gentleAiCheck = if ($runGentleAiCheck) {
+      [pscustomobject]@{
+        skipped = $false
+        healthy = [bool]$gentleAiResult.healthy
+        issues = @($gentleAiIssues)
+        cliPaths = @($gentleAiResult.cliPaths)
+        globalGentleAi = [bool]$gentleAiResult.globalGentleAi
+        workspaceGentleAi = [bool]$gentleAiResult.workspaceGentleAi
+        globalEngramMcp = [bool]$gentleAiResult.globalEngramMcp
+        workspaceEngramMcp = [bool]$gentleAiResult.workspaceEngramMcp
+        skillCollisions = @($gentleAiResult.skillCollisions)
+        alwaysApplyRules = @($gentleAiResult.alwaysApplyRules)
+      }
+    } elseif ((Test-HubProfileUsesGentleAi -Profile $profile) -and $SkipGentleAiCheck) {
+      [pscustomobject]@{ skipped = $true; reason = 'SkipGentleAiCheck' }
+    } else {
+      $null
+    }
+    issues = @($issues)
+    healthy = $issues.Count -eq 0
+    remediation = @(
+      'Abrí el proyecto hijo como workspace raíz en Cursor antes de probar MCP en el agente.',
+      'Para correcciones Gentle AI: gentle-ai doctor y gentle-ai sync.',
+      'Para MCP Archi/Backlog: rutas reales en .cursor/mcp.json (ver docs/MCP-PREREQUISITOS.md).'
+    )
+  }
+}
+
+function Write-HubProjectDiagnostic {
+  param([Parameter(Mandatory = $true)] $Result)
+  Write-Host "Proyecto: $($Result.targetPath)"
+  Write-Host "Perfil detectado: $($Result.profile)"
+  if ($Result.expectedProfile -ne 'Auto') { Write-Host "Perfil esperado: $($Result.expectedProfile)" }
+  Write-Host ''
+  Write-Host '--- Estructura del template ---' -ForegroundColor Cyan
+  if ($Result.structureCheck.healthy) {
+    Write-Host 'Resultado: OK' -ForegroundColor Green
+  } else {
+    Write-Host "Resultado: revisar $($Result.structureCheck.issues -join ', ')" -ForegroundColor Yellow
+  }
+
+  if ($Result.gentleAiCheck -and -not $Result.gentleAiCheck.skipped) {
+    $gentle = $Result.gentleAiCheck
+    Write-Host ''
+    Write-Host '--- Gentle AI ---' -ForegroundColor Cyan
+    Write-Host "Gentle AI global: $($gentle.globalGentleAi) | workspace: $($gentle.workspaceGentleAi)"
+    Write-Host "Engram MCP global: $($gentle.globalEngramMcp) | workspace: $($gentle.workspaceEngramMcp)"
+    Write-Host "CLI: $($gentle.cliPaths -join '; ')"
+    if (@($gentle.skillCollisions).Count -gt 0) {
+      Write-Host "Skills local/global repetidas: $($gentle.skillCollisions -join ', ')"
+    }
+    Write-Host "Reglas alwaysApply: $($gentle.alwaysApplyRules -join ', ')"
+    if ($gentle.healthy) { Write-Host 'Resultado: OK' -ForegroundColor Green }
+    else { Write-Host "Resultado: revisar $($gentle.issues -join ', ')" -ForegroundColor Yellow }
+  } elseif ($Result.gentleAiCheck -and $Result.gentleAiCheck.skipped) {
+    Write-Host ''
+    Write-Host '--- Gentle AI ---' -ForegroundColor Cyan
+    Write-Host 'Omitido (-SkipGentleAiCheck)' -ForegroundColor DarkYellow
+  }
+
+  Write-Host ''
+  if ($Result.healthy) { Write-Host 'Resultado global: OK' -ForegroundColor Green }
+  else { Write-Host "Resultado global: revisar $($Result.issues -join ', ')" -ForegroundColor Yellow }
+}
+
+function Get-ConsultingCopilotPreflightDiagnostic {
+  param(
+    [ValidateSet('GentleAi', 'Consulting', 'ConsultingAI', 'Full')]
+    [string] $StackProfile = 'ConsultingAI',
+    [string] $TargetPath,
+    [string] $UserHome
+  )
+
+  $effectiveProfile = if ($StackProfile -eq 'Full') { 'ConsultingAI' } else { $StackProfile }
+  $needsGentle = $effectiveProfile -in @('GentleAi', 'ConsultingAI')
+  $environment = Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
+
+  $checks = [System.Collections.Generic.List[object]]::new()
+
+  if ($needsGentle) {
+    $checks.Add([pscustomobject]@{
+      group = 'gentle-ai'
+      label = 'Un único gentle-ai CLI'
+      ok = $environment.CliCount -eq 1
+      detail = if ($environment.CliCount -eq 0) {
+        'No encontrado. Instalación estable: go install github.com/gentleman-programming/gentle-ai/v2/cmd/gentle-ai@latest'
+      } elseif ($environment.CliCount -gt 1) { $environment.CliPaths -join '; ' } else { $environment.CliPath }
+    })
+    $checks.Add([pscustomobject]@{
+      group = 'gentle-ai'
+      label = 'Configuración global para Cursor'
+      ok = [bool]$environment.GlobalInstalled
+      detail = if ($environment.GlobalInstalled) {
+        'Se reutilizará automáticamente; la opción workspace queda bloqueada.'
+      } else { 'Al generar se preguntará: Global (recomendado), Proyecto o Cancelar.' }
+    })
+    if ($TargetPath) {
+      $checks.Add([pscustomobject]@{
+        group = 'gentle-ai'
+        label = 'Sin Gentle AI duplicado en workspace'
+        ok = -not ($environment.GlobalInstalled -and $environment.WorkspaceInstalled)
+        detail = if ($environment.WorkspaceInstalled) { $environment.WorkspaceMarkerPaths -join '; ' } else { '' }
+      })
+      $checks.Add([pscustomobject]@{
+        group = 'gentle-ai'
+        label = 'Sin Engram duplicado en MCP local'
+        ok = -not $environment.WorkspaceEngramConfigured
+        detail = if ($environment.WorkspaceEngramConfigured) { $environment.WorkspaceMcpPath } else { '' }
+      })
+    }
+  }
+
+  if ($effectiveProfile -in @('Consulting', 'ConsultingAI')) {
+    $nodePaths = @(Get-CommandExecutablePaths -Name 'node')
+    $checks.Add([pscustomobject]@{
+      group = 'consulting'
+      label = 'Node.js'
+      ok = $nodePaths.Count -eq 1
+      detail = 'Requerido sólo si se usa Draw.io MCP.'
+    })
+    $checks.Add([pscustomobject]@{
+      group = 'consulting'
+      label = 'Pandoc'
+      ok = @(Get-CommandExecutablePaths -Name 'pandoc').Count -eq 1
+      detail = 'Opcional para regenerar DOCX.'
+    })
+    $checks.Add([pscustomobject]@{
+      group = 'consulting'
+      label = 'Backlog CLI'
+      ok = @(Get-CommandExecutablePaths -Name 'backlog').Count -eq 1
+      detail = 'Opcional.'
+    })
+  }
+
+  $failedChecks = @($checks | Where-Object { -not $_.ok })
+  return [pscustomobject]@{
+    stackProfile = $effectiveProfile
+    targetPath = $TargetPath
+    checks = @($checks)
+    gentleAiCliPath = if ($environment.CliCount -eq 1) { $environment.CliPath } else { $null }
+    healthy = $failedChecks.Count -eq 0
+    issues = @($failedChecks | ForEach-Object { $_.label })
+  }
+}
+
+function Write-ConsultingCopilotPreflightDiagnostic {
+  param([Parameter(Mandatory = $true)] $Result)
+  Write-Host "Consulting Copilot — diagnóstico ($($Result.stackProfile))" -ForegroundColor Cyan
+  Write-Host ''
+
+  $groups = @($Result.checks | Group-Object -Property group)
+  foreach ($group in $groups) {
+    $title = switch ($group.Name) {
+      'gentle-ai' { '--- Gentle AI (sólo lectura) ---' }
+      'consulting' { '--- Consultoría ---' }
+      default { "--- $($group.Name) ---" }
+    }
+    Write-Host $title
+    foreach ($check in $group.Group) {
+      $icon = if ($check.ok) { '[ok]' } else { '[!!]' }
+      Write-Host "$icon  $($check.label)" -ForegroundColor $(if ($check.ok) { 'Green' } else { 'Yellow' })
+      if ($check.detail) { Write-Host "     $($check.detail)" }
+    }
+    if ($group.Name -eq 'gentle-ai' -and $Result.gentleAiCliPath) {
+      Write-Host ''
+      & $Result.gentleAiCliPath doctor 2>&1 | ForEach-Object { Write-Host $_ }
+    }
+    Write-Host ''
+  }
+
+  Write-Host 'Crear proyecto:' -ForegroundColor Cyan
+  Write-Host '  pwsh -File ./scripts/New-ConsultingCopilotProject.ps1 -TargetPath "/ruta/absoluta/proyecto" -StackProfile ConsultingAI'
+  Write-Host ''
+  Write-Host 'El generador resuelve Gentle AI antes de crear archivos y no corrige instalaciones existentes automáticamente.'
+}
+
+function Get-HubPlatformInfo { Platform\Get-HubPlatformInfo @args }
+function Assert-HubWindowsNativeHost { Platform\Assert-HubWindowsNativeHost @args }
+function Join-HubPath {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]] $Segments)
+  Platform\Join-HubPath @Segments
+}
+function Compare-HubPath {
+  param([Parameter(Mandatory = $true)][string] $Left, [Parameter(Mandatory = $true)][string] $Right)
+  Platform\Compare-HubPath -Left $Left -Right $Right
+}
+function Resolve-HubModulePath {
+  param([Parameter(Mandatory = $true)][string] $ScriptRoot, [Parameter(Mandatory = $true)][string] $ModuleName)
+  Platform\Resolve-HubModulePath -ScriptRoot $ScriptRoot -ModuleName $ModuleName
+}
+function Test-HubPathUnderWindowsMount {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  Platform\Test-HubPathUnderWindowsMount -Path $Path
+}
+function Test-HubArchiMcpPath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  Platform\Test-HubArchiMcpPath -Path $Path
+}
+function Test-HubMcpConfigurationPaths {
+  param([bool] $IncludeBacklogMcp, [string] $BacklogMcpCwd, [bool] $IncludeArchiMcp, [string[]] $ArchiMcpArgs)
+  Platform\Test-HubMcpConfigurationPaths -IncludeBacklogMcp:$IncludeBacklogMcp -BacklogMcpCwd $BacklogMcpCwd -IncludeArchiMcp:$IncludeArchiMcp -ArchiMcpArgs $ArchiMcpArgs
+}
+function Write-HubPathLocationWarnings {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  Platform\Write-HubPathLocationWarnings -TargetPath $TargetPath
+}
+function Get-HubCommandExecutablePaths {
+  param([Parameter(Mandatory = $true)][string] $Name, [switch] $AllowWindowsExecutable)
+  Platform\Get-HubCommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable
+}
+function Get-HubRegistryPath {
+  param([Parameter(Mandatory = $true)][string] $HubRoot)
+  HubRegistry\Get-HubRegistryPath -HubRoot $HubRoot
+}
+function Read-HubRegistry {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [string] $RegistryPath)
+  HubRegistry\Read-HubRegistry -HubRoot $HubRoot -RegistryPath $RegistryPath
+}
+function Resolve-HubProjectPath {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [Parameter(Mandatory = $true)] $Project)
+  HubRegistry\Resolve-HubProjectPath -HubRoot $HubRoot -Project $Project
+}
+function Migrate-HubRegistryToV2 {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [string] $RegistryPath,
+    [ValidateSet('Reject', 'KeepExternal')] [string] $ExternalPolicy = 'Reject',
+    [switch] $DryRun,
+    [switch] $NoBackup
+  )
+  HubRegistry\Migrate-HubRegistryToV2 -HubRoot $HubRoot -RegistryPath $RegistryPath -ExternalPolicy $ExternalPolicy -DryRun:$DryRun -NoBackup:$NoBackup
+}
+function Test-HubRegistryPortability {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [string] $RegistryPath)
+  HubRegistry\Test-HubRegistryPortability -HubRoot $HubRoot -RegistryPath $RegistryPath
+}
+function Add-HubRegistryProject {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][hashtable] $Entry,
+    [string] $RegistryPath,
+    [switch] $Force
+  )
+  HubRegistry\Add-HubRegistryProject -HubRoot $HubRoot -Entry $Entry -RegistryPath $RegistryPath -Force:$Force
+}
+function Write-HubRegistry {
+  param([Parameter(Mandatory = $true)][string] $RegistryPath, [Parameter(Mandatory = $true)] $Document)
+  HubRegistry\Write-HubRegistry -RegistryPath $RegistryPath -Document $Document
+}
+
 Export-ModuleMember -Function @(
+  'Get-ConsultingUserHome', 'Get-HubProjectsIaRoot',
   'ConvertTo-ConsultingSlug', 'Read-ConsultingPrompt', 'Read-ConsultingPromptYesNo', 'Read-ConsultingChoice',
-  'Test-ConsultingTargetPath', 'Copy-ConsultingSkeleton', 'Copy-ProjectOverlay',
+  'Resolve-ConsultingFinalTargetPath', 'Test-ConsultingTargetPath',
+  'New-ConsultingProjectStagingPath', 'Promote-ConsultingProjectStaging', 'Remove-ConsultingProjectStaging',
+  'Copy-ConsultingSkeleton', 'Copy-ProjectOverlay',
   'Rename-ConsultingArchimateTemplates', 'Get-ConsultingTokenReplacements', 'Invoke-ConsultingTokenReplacement',
   'Remove-ConsultingClaudeLayer', 'Get-CommandExecutablePaths', 'Test-McpServerConfigured',
   'Get-GentleAiEnvironment', 'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
   'Resolve-GentleAiScopeDecision', 'Invoke-GentleAiInstall', 'Invoke-SkillRegistryRefresh',
+  'Resolve-GentleAiPreflight', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
+  'Get-HubRegistryPath', 'Read-HubRegistry', 'Resolve-HubProjectPath', 'Migrate-HubRegistryToV2',
+  'Test-HubRegistryPortability', 'Add-HubRegistryProject', 'Write-HubRegistry',
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',
@@ -1014,5 +1633,11 @@ Export-ModuleMember -Function @(
   'Resolve-HubRootPath', 'Test-HubPathIsChildOf', 'Test-HubRootLayout', 'Get-HubMoveBackupPath',
   'Test-HubMovePreconditions', 'Replace-HubPathPrefixInText', 'Replace-HubPathLiteralInText', 'Update-HubRegistryPaths',
   'Update-HubChildMcpPaths', 'Update-HubPathReferences', 'Test-HubMoveResult',
-  'New-HubMoveBackup', 'Move-HubRootDirectory', 'Invoke-HubRelocate'
+  'New-HubMoveBackup', 'Move-HubRootDirectory', 'Invoke-HubRelocate',
+  'Get-GentleAiProjectDiagnostic', 'Write-GentleAiProjectDiagnostic',
+  'Get-HubProjectDiagnostic', 'Write-HubProjectDiagnostic',
+  'Get-ConsultingCopilotPreflightDiagnostic', 'Write-ConsultingCopilotPreflightDiagnostic',
+  'Get-HubPlatformInfo', 'Assert-HubWindowsNativeHost', 'Join-HubPath', 'Compare-HubPath', 'Resolve-HubModulePath',
+  'Test-HubPathUnderWindowsMount', 'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths',
+  'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths'
 )
