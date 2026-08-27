@@ -12,8 +12,9 @@ pwsh -NoProfile -File .\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 
 ```bash
 # Ubuntu / WSL
-cd /home/usuario/work/hub-projects-ia/scripts
-pwsh -NoProfile -File ./Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
+cd /home/usuario/work/hub-projects-ia
+./scripts/hub doctor -StackProfile ConsultingAI
+# equivalente: pwsh -File ./scripts/Install-ConsultingCopilot.ps1 ...
 ```
 
 El diagnóstico es read-only (nombre histórico `Install-*`; no instala). Si hay varios ejecutables o global + workspace, corregir primero; el generador no toca archivos administrados.

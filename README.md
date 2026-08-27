@@ -43,7 +43,14 @@ pwsh -NoProfile -File .\New-HubProject.ps1 `
 ```
 
 ```bash
-# Ubuntu / WSL
+# Ubuntu / WSL (launcher)
+cd /home/usuario/work/hub-projects-ia
+./scripts/hub doctor -StackProfile ConsultingAI
+./scripts/hub new -StackProfile ConsultingAI \
+  -ClientDisplayName "IPLAN" -ClientSlug "iplan" \
+  -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+
+# o invocación directa
 cd /home/usuario/work/hub-projects-ia/scripts
 pwsh -NoProfile -File ./Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 

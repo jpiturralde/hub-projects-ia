@@ -501,6 +501,14 @@ Responsabilidades prohibidas:
 - Duplicar validaciones de negocio.
 - Implementar lógica diferente a Windows.
 
+Tareas:
+
+- [x] Crear `scripts/hub` (Bash) con doctor/new/test/refresh/--help.
+- [x] Validar `pwsh` Linux (rechazar `/mnt` y `$IsLinux=false`).
+- [x] Trazas de test (`HUB_LAUNCHER_TRACE=1`) sin lógica de negocio.
+- [x] Pasar `shellcheck` y tests de integración del launcher.
+- [x] Documentar en `scripts/README.md` / README / HUB-WORKFLOW.
+
 Criterios de salida:
 
 - El launcher pasa `shellcheck`.
@@ -698,7 +706,7 @@ La implementación estará terminada cuando:
 - [ ] Los diagnósticos son read-only.
 - [ ] Los scripts multiplataforma no contienen dependencias accidentales de Windows.
 - [ ] `Move-HubProjectsIa.ps1` está protegido y documentado como Windows-only.
-- [ ] El launcher Bash no duplica lógica de negocio y pasa `shellcheck`.
+- [x] El launcher Bash no duplica lógica de negocio y pasa `shellcheck`.
 - [ ] Los manifiestos normalizados de Windows y Ubuntu son equivalentes.
 - [ ] Un piloto descartable fue validado antes de usar la solución sobre IPLAN.
 - [ ] La documentación permite reproducir instalación, pruebas y uso.

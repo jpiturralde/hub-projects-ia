@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Hub Projects IA — launcher Ubuntu/WSL (solo traduce a entrypoints PowerShell).
+# No genera proyectos, no toca el registry ni Gentle AI/Engram.
+set -euo pipefail
+
+HUB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPTS_DIR="${HUB_ROOT}/scripts"
+
+usage() {
+  cat <<'EOF'
+Hub Projects IA — launcher Ubuntu/WSL
+
+Uso:
+  ./scripts/hub <comando> [argumentos...]
+
+Comandos:
+  doctor [args...]              Preflight / diagnóstico (Install-ConsultingCopilot.ps1)
+  new [args...]                 Crear proyecto bajo projects/ (New-HubProject.ps1)
+  test <ruta> [args...]         Smoke read-only del hijo (Test-HubProject.ps1)
+  refresh [ruta|--all] [args...]  Regenera GETTING-STARTED (Refresh-ProjectGettingStarted.ps1)
+  help, -h, --help              Esta ayuda
+
+Ejemplos:
+  ./scripts/hub doctor -StackProfile ConsultingAI
+  ./scripts/hub new -StackProfile ConsultingAI \
+    -ClientDisplayName "IPLAN" -ClientSlug "iplan" \
+    -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
+  ./scripts/hub test projects/iplan-prev-2142 -ExpectedProfile ConsultingAI
+  ./scripts/hub refresh projects/iplan-prev-2142
+  ./scripts/hub refresh --all
+
+Requisito: PowerShell 7 Linux (`pwsh`) en PATH (no el ejecutable Windows vía /mnt).
+EOF
+}
+
+die() {
+  local code="$1"
+  shift
+  printf '%s\n' "$*" >&2
+  exit "${code}"
+}
+
+require_linux_pwsh() {
+  local pwsh_bin
+  if ! pwsh_bin="$(command -v pwsh 2>/dev/null)"; then
+    die 3 "No se encontró 'pwsh' (PowerShell 7). Instalalo en Linux/WSL y asegurate de que esté en PATH."
+  fi
+  case "${pwsh_bin}" in
+    /mnt/*)
+      die 3 "El 'pwsh' en PATH apunta a Windows (${pwsh_bin}). Usá el PowerShell 7 instalado en Linux/WSL."
+      ;;
+  esac
+  # shellcheck disable=SC2016 # $IsLinux lo evalúa pwsh, no bash
+  if ! "${pwsh_bin}" -NoProfile -Command 'if (-not $IsLinux) { exit 3 }' >/dev/null 2>&1; then
+    die 3 "El 'pwsh' disponible no es Linux (\$IsLinux=false). Usá PowerShell 7 nativo en Ubuntu/WSL."
+  fi
+  printf '%s' "${pwsh_bin}"
+}
+
+resolve_hub_path() {
+  local input="$1"
+  if [[ "${input}" = /* ]]; then
+    printf '%s' "${input}"
+    return
+  fi
+  # Relativo al directorio actual si existe; si no, relativo a la raíz del hub.
+  if [[ -e "${input}" || -e "$(pwd)/${input}" ]]; then
+    # Prefer cwd when the path exists from the caller's working directory.
+    (cd "$(pwd)" && realpath -m "${input}")
+    return
+  fi
+  realpath -m "${HUB_ROOT}/${input}"
+}
+
+invoke_pwsh() {
+  local script_name="$1"
+  shift
+  local script_path="${SCRIPTS_DIR}/${script_name}"
+  if [[ ! -f "${script_path}" ]]; then
+    die 1 "No se encuentra el entrypoint: ${script_path}"
+  fi
+
+  if [[ "${HUB_LAUNCHER_TRACE:-}" == "1" ]]; then
+    # Solo para tests: imprime la invocación canónica sin ejecutar.
+    printf 'pwsh -NoProfile -File %s' "${script_path}"
+    local arg
+    for arg in "$@"; do
+      printf ' %q' "${arg}"
+    done
+    printf '\n'
+    return 0
+  fi
+
+  local pwsh_bin
+  pwsh_bin="$(require_linux_pwsh)"
+  exec "${pwsh_bin}" -NoProfile -File "${script_path}" "$@"
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    usage
+    exit 1
+  fi
+
+  local cmd="$1"
+  shift
+
+  case "${cmd}" in
+    help|-h|--help)
+      usage
+      exit 0
+      ;;
+    doctor)
+      invoke_pwsh "Install-ConsultingCopilot.ps1" "$@"
+      ;;
+    new)
+      invoke_pwsh "New-HubProject.ps1" "$@"
+      ;;
+    test)
+      if [[ $# -eq 0 ]]; then
+        die 1 "Uso: ./scripts/hub test <ruta-proyecto> [args...]
+Ejemplo: ./scripts/hub test projects/iplan-prev-2142 -ExpectedProfile ConsultingAI"
+      fi
+      local target
+      target="$(resolve_hub_path "$1")"
+      shift
+      invoke_pwsh "Test-HubProject.ps1" -TargetPath "${target}" "$@"
+      ;;
+    refresh)
+      if [[ $# -eq 0 || "${1:-}" == "--all" ]]; then
+        if [[ "${1:-}" == "--all" ]]; then
+          shift
+        fi
+        invoke_pwsh "Refresh-ProjectGettingStarted.ps1" -AllFromRegistry "$@"
+      else
+        local target
+        target="$(resolve_hub_path "$1")"
+        shift
+        invoke_pwsh "Refresh-ProjectGettingStarted.ps1" -TargetPath "${target}" "$@"
+      fi
+      ;;
+    *)
+      die 1 "Comando desconocido: ${cmd}
+Ejecutá ./scripts/hub --help"
+      ;;
+  esac
+}
+
+main "$@"
