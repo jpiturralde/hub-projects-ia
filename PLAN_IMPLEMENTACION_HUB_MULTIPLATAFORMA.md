@@ -349,12 +349,12 @@ Objetivo: resolver defectos que impiden un refactor seguro, sin cambiar el contr
 
 Tareas:
 
-- [ ] Reemplazar `Copy-Item -LiteralPath ".../*"` por una copia portable que expanda correctamente el contenido.
-- [ ] Eliminar `exit` dentro de scripts llamados por otros scripts o dentro de funciones reutilizables.
-- [ ] Hacer que los diagnósticos devuelvan objetos/resultados estructurados.
-- [ ] Reservar los códigos de salida para los entrypoints ejecutables.
-- [ ] Separar claramente preflight, decisión del usuario, staging y commit de la creación.
-- [ ] Evitar proyectos parciales mediante directorios temporales y promoción final.
+- [x] Reemplazar `Copy-Item -LiteralPath ".../*"` por una copia portable que expanda correctamente el contenido.
+- [x] Eliminar `exit` dentro de scripts llamados por otros scripts o dentro de funciones reutilizables.
+- [x] Hacer que los diagnósticos devuelvan objetos/resultados estructurados.
+- [x] Reservar los códigos de salida para los entrypoints ejecutables.
+- [x] Separar claramente preflight, decisión del usuario, staging y commit de la creación.
+- [x] Evitar proyectos parciales mediante directorios temporales y promoción final.
 
 Criterios de salida:
 

@@ -120,10 +120,13 @@ if (-not [string]::IsNullOrWhiteSpace($EngramPath)) {
   Write-Warning '-EngramPath se conserva sólo por compatibilidad y se ignora: Engram es administrado por Gentle AI y no se duplica en el MCP local.'
 }
 
-$TargetPath = Test-ConsultingTargetPath -TargetPath $TargetPath -Force:$Force
+$finalTargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force
+$stagingPath = New-ConsultingProjectStagingPath
+$TargetPath = $stagingPath
 
+try {
 if ($effectiveProfile -eq 'GentleAi') {
-  if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Split-Path -Leaf $TargetPath }
+  if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = Split-Path -Leaf $finalTargetPath }
   Copy-ConsultingSkeleton -SourcePath $skeletonMinimalPath -TargetPath $TargetPath
   if ($gentleDecision.Action -eq 'Install' -and $gentleDecision.Scope -eq 'Workspace') {
     Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Workspace -TargetPath $TargetPath
@@ -134,13 +137,7 @@ if ($effectiveProfile -eq 'GentleAi') {
   Test-ConsultingPlaceholders -TargetPath $TargetPath
   if (-not $SkipSkillRegistryRefresh) { Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $gentleCliPath }
   $gettingStarted = Write-ProjectGettingStarted -TargetPath $TargetPath -StackProfile GentleAi -Title $ProjectName -GentleAiScope $gentleDecision.Scope
-  Write-Host "Listo. Proyecto Gentle AI generado en: $TargetPath"
-  if (-not $SkipHandoffSummary) {
-    Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile GentleAi -GettingStartedPath $gettingStarted -GentleAiScope $gentleDecision.Scope
-  }
-  return
-}
-
+} else {
 if ([string]::IsNullOrWhiteSpace($ClientDisplayName)) { $ClientDisplayName = Read-ConsultingPrompt 'Nombre del cliente' 'Cliente' }
 if ([string]::IsNullOrWhiteSpace($ClientSlug)) {
   $suggestedSlug = ConvertTo-ConsultingSlug $ClientDisplayName
@@ -157,7 +154,7 @@ $docTitlePrefix = "$ClientDisplayName - $InitiativeDisplayName"
 if (-not $PSBoundParameters.ContainsKey('IncludeBacklogMcp')) {
   $IncludeBacklogMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Backlog?' $false
 }
-if ($IncludeBacklogMcp -and [string]::IsNullOrWhiteSpace($BacklogMcpCwd)) { $BacklogMcpCwd = $TargetPath }
+if ($IncludeBacklogMcp -and [string]::IsNullOrWhiteSpace($BacklogMcpCwd)) { $BacklogMcpCwd = $finalTargetPath }
 if (-not $PSBoundParameters.ContainsKey('IncludeArchiMcp')) {
   $IncludeArchiMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Archi?' $false
 }
@@ -229,9 +226,24 @@ $gettingStarted = Write-ProjectGettingStarted `
   -GentleAiScope $gentleScopeValue -IncludeDrawioMcp $IncludeDrawioMcp `
   -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -IncludeArchiMcp ([bool]$IncludeArchiMcp) `
   -CorporateDocxTemplateName $CorporateDocxTemplateName
+}
 
-Write-Host "Listo. Proyecto $effectiveProfile generado en: $TargetPath"
-if ($IncludeClaudeCoworkLayer) { Write-Host 'Capa opcional Claude/Cowork incluida.' }
-if (-not $SkipHandoffSummary) {
-  Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $effectiveProfile -GettingStartedPath $gettingStarted -GentleAiScope $gentleScopeValue
+  $TargetPath = Promote-ConsultingProjectStaging -StagingPath $stagingPath -TargetPath $finalTargetPath -Force:$Force
+  $stagingPath = $null
+
+  if ($effectiveProfile -eq 'GentleAi') {
+    Write-Host "Listo. Proyecto Gentle AI generado en: $TargetPath"
+    if (-not $SkipHandoffSummary) {
+      Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile GentleAi -GettingStartedPath $gettingStarted -GentleAiScope $gentleDecision.Scope
+    }
+  } else {
+    Write-Host "Listo. Proyecto $effectiveProfile generado en: $TargetPath"
+    if ($IncludeClaudeCoworkLayer) { Write-Host 'Capa opcional Claude/Cowork incluida.' }
+    if (-not $SkipHandoffSummary) {
+      Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $effectiveProfile -GettingStartedPath $gettingStarted -GentleAiScope $gentleScopeValue
+    }
+  }
+} catch {
+  Remove-ConsultingProjectStaging -StagingPath $stagingPath
+  throw
 }

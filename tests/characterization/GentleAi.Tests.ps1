@@ -12,7 +12,7 @@ AfterAll {
   Remove-TestSandbox
 }
 
-Describe 'Perfil GentleAi' -Skip:($IsLinux) {
+Describe 'Perfil GentleAi' {
   BeforeEach {
     $script:ctx = Initialize-CharacterizationContext -FakeHomeFixture 'global-gentle-ai' -WithFakeCommands -SmartGentleAi
   }

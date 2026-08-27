@@ -45,7 +45,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Registry') {
     if (-not $project.absolutePath) { continue }
     Invoke-RefreshOne -Path ([string]$project.absolutePath)
   }
-  exit 0
+  return
 }
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
