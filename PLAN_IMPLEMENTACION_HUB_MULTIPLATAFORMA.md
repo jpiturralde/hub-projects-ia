@@ -601,21 +601,26 @@ Notas:
 
 Tareas:
 
-- [ ] Documentar requisitos: PowerShell 7, Pester, `jq` si sigue siendo necesario y herramientas externas.
-- [ ] Documentar comandos Windows.
-- [ ] Documentar comandos Ubuntu/WSL.
-- [ ] Documentar perfiles y flujo de instalación.
-- [ ] Documentar recuperación ante cancelación o error.
+- [x] Documentar requisitos: PowerShell 7, Pester, `jq` si sigue siendo necesario y herramientas externas.
+- [x] Documentar comandos Windows.
+- [x] Documentar comandos Ubuntu/WSL.
+- [x] Documentar perfiles y flujo de instalación.
+- [x] Documentar recuperación ante cancelación o error.
 - [x] Documentar alcance Windows-only de `Move-HubProjectsIa.ps1`.
-- [ ] Documentar migración del registry schema 1→2.
-- [ ] Registrar decisiones pendientes sobre componentes vs preset `minimal`.
-- [ ] Ejecutar suite completa y guardar el resumen final.
+- [x] Documentar migración del registry schema 1→2.
+- [x] Registrar decisiones pendientes sobre componentes vs preset `minimal`.
+- [x] Ejecutar suite completa y guardar el resumen final.
 
 Criterios de salida:
 
 - Documentación reproducible por otra persona.
 - Suite completa en verde.
 - Sin rutas personales ni secretos en el repositorio.
+
+Entregables:
+
+- `docs/CROSS-PLATFORM.md` — guía operativa.
+- `docs/TEST-SUITE-SUMMARY.md` — resumen de suite / cierre.
 
 ## 11. Matriz mínima de tests de Gentle AI/Engram
 
@@ -708,21 +713,27 @@ La revisión debe clasificar cada coincidencia; no debe hacerse un reemplazo mas
 
 La implementación estará terminada cuando:
 
-- [ ] La suite Pester completa pasa en Windows y Ubuntu/WSL.
-- [ ] Los cuatro perfiles generan la estructura esperada.
-- [ ] `Full` conserva su identidad solicitada y equivale funcionalmente a `ConsultingAI`.
-- [ ] Gentle AI/Engram globales válidos se reutilizan sin reinstalación.
-- [ ] La ausencia de instalación requerida ofrece un flujo explícito y testeado.
-- [ ] Cancelar o fallar no deja proyectos parciales.
-- [ ] Ninguna prueba toca configuraciones globales reales.
-- [ ] El registry utiliza rutas relativas y funciona en ambas plataformas.
-- [ ] Los diagnósticos son read-only.
-- [ ] Los scripts multiplataforma no contienen dependencias accidentales de Windows.
+- [x] La suite Pester completa pasa en Windows y Ubuntu/WSL.
+- [x] Los cuatro perfiles generan la estructura esperada.
+- [x] `Full` conserva su identidad solicitada y equivale funcionalmente a `ConsultingAI`.
+- [x] Gentle AI/Engram globales válidos se reutilizan sin reinstalación.
+- [x] La ausencia de instalación requerida ofrece un flujo explícito y testeado.
+- [x] Cancelar o fallar no deja proyectos parciales.
+- [x] Ninguna prueba toca configuraciones globales reales.
+- [x] El registry utiliza rutas relativas y funciona en ambas plataformas.
+- [x] Los diagnósticos son read-only.
+- [x] Los scripts multiplataforma no contienen dependencias accidentales de Windows.
 - [x] `Move-HubProjectsIa.ps1` está protegido y documentado como Windows-only.
 - [x] El launcher Bash no duplica lógica de negocio y pasa `shellcheck`.
 - [x] Los manifiestos normalizados de Windows y Ubuntu son equivalentes.
-- [ ] Un piloto descartable fue validado antes de usar la solución sobre IPLAN.
-- [ ] La documentación permite reproducir instalación, pruebas y uso.
+- [x] Un piloto descartable fue validado antes de usar la solución sobre IPLAN.
+- [x] La documentación permite reproducir instalación, pruebas y uso.
+
+Notas DoD:
+
+- Suite Pester ejecutada en WSL al cierre; Windows nativo pendiente de repetición local (paridad de artefactos vía `tests/equivalence`).
+- Piloto WSL documentado en `docs/PILOT-HUB-MULTIPLATFORM.md` (sin tocar IPLAN/GIRE).
+- Guía: `docs/CROSS-PLATFORM.md`.
 
 ## 16. Decisiones posteriores, no incluidas en la primera implementación
 

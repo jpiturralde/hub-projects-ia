@@ -97,10 +97,12 @@ Guía: [docs/MIGRATION-GENTLE-AI.md](docs/MIGRATION-GENTLE-AI.md). Resumen de es
 ## Pruebas
 
 ```powershell
-.\tests\Run-Tests.ps1
+pwsh -NoProfile -File .\tests\Run-Tests.ps1
 ```
 
-Requiere Pester. Cubre resolución de alcance, duplicados, perfiles, MCP local, always-on, skills y modelos.
+Requiere Pester 5+. Cubre perfiles, Gentle AI, registry, entrypoints, launcher, equivalencia y relocate Windows-only.
+
+Guía multiplataforma (requisitos, comandos Windows/WSL, registry v2, recuperación): [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md). Resumen de suite: [docs/TEST-SUITE-SUMMARY.md](docs/TEST-SUITE-SUMMARY.md).
 
 ## Hub y proyectos hijos
 
@@ -108,4 +110,4 @@ El template vive en `skeleton/` y `overlays/`. Los proyectos viven en `projects/
 
 `Move-HubProjectsIa.ps1` es **Windows-only** (no Linux/WSL ni migración Windows↔WSL). Catálogo de scripts: [scripts/README.md](scripts/README.md).
 
-Flujo: [HUB-WORKFLOW.md](HUB-WORKFLOW.md). MCP opcionales: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md).
+Flujo: [HUB-WORKFLOW.md](HUB-WORKFLOW.md). MCP opcionales: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md). Piloto: [docs/PILOT-HUB-MULTIPLATFORM.md](docs/PILOT-HUB-MULTIPLATFORM.md).

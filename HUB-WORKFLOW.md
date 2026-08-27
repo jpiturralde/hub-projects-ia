@@ -1,6 +1,6 @@
 # Flujo de trabajo — Hub Projects IA
 
-Motor único: **PowerShell 7** (`pwsh`) en Windows y Ubuntu/WSL. Detalle de entrypoints: [scripts/README.md](scripts/README.md).
+Motor único: **PowerShell 7** (`pwsh`) en Windows y Ubuntu/WSL. Guía completa: [docs/CROSS-PLATFORM.md](docs/CROSS-PLATFORM.md). Entrypoints: [scripts/README.md](scripts/README.md).
 
 ## 1. Diagnosticar
 
