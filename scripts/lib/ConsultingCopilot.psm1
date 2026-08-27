@@ -150,8 +150,31 @@ function Test-McpServerConfigured {
   } catch { return $false }
 }
 
+function Get-ConsultingUserHome {
+  param([string] $UserHome)
+  if (-not [string]::IsNullOrWhiteSpace($UserHome)) {
+    return Resolve-HubRootPath $UserHome
+  }
+  if (-not [string]::IsNullOrWhiteSpace($env:TEST_USER_HOME)) {
+    return Resolve-HubRootPath $env:TEST_USER_HOME
+  }
+  return [Environment]::GetFolderPath('UserProfile')
+}
+
+function Get-HubProjectsIaRoot {
+  param([string] $ScriptRoot)
+  if (-not [string]::IsNullOrWhiteSpace($env:HUB_PROJECTS_IA_ROOT)) {
+    return Resolve-HubRootPath $env:HUB_PROJECTS_IA_ROOT
+  }
+  if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
+    throw 'ScriptRoot es obligatorio cuando HUB_PROJECTS_IA_ROOT no está definido.'
+  }
+  return (Resolve-Path (Join-Path $ScriptRoot '..')).Path
+}
+
 function Get-GentleAiEnvironment {
-  param([string] $TargetPath, [string] $UserHome = [Environment]::GetFolderPath('UserProfile'))
+  param([string] $TargetPath, [string] $UserHome)
+  $UserHome = Get-ConsultingUserHome -UserHome $UserHome
   $cliPaths = @(Get-CommandExecutablePaths -Name 'gentle-ai')
   $globalRule = Join-Path $UserHome '.cursor\rules\gentle-ai.mdc'
   $globalState = Join-Path $UserHome '.gentle-ai\state.json'
@@ -257,10 +280,15 @@ function Resolve-GentleAiScopeDecision {
 }
 
 function Invoke-GentleAiInstall {
-  param([string] $CliPath, [ValidateSet('Global', 'Workspace')] [string] $Scope, [string] $TargetPath)
+  param(
+    [string] $CliPath,
+    [ValidateSet('Global', 'Workspace')] [string] $Scope,
+    [string] $TargetPath,
+    [string] $UserHome
+  )
   if (-not (Test-Path -LiteralPath $CliPath -PathType Leaf)) { throw "gentle-ai no encontrado: $CliPath" }
   if ($Scope -eq 'Workspace' -and [string]::IsNullOrWhiteSpace($TargetPath)) { throw 'Workspace requiere TargetPath.' }
-  $workingPath = if ($Scope -eq 'Workspace') { $TargetPath } else { [Environment]::GetFolderPath('UserProfile') }
+  $workingPath = if ($Scope -eq 'Workspace') { $TargetPath } else { Get-ConsultingUserHome -UserHome $UserHome }
   Write-Host "Configurando Gentle AI para Cursor con alcance $Scope..."
   Push-Location $workingPath
   try {
@@ -1001,6 +1029,7 @@ function Invoke-HubRelocate {
 }
 
 Export-ModuleMember -Function @(
+  'Get-ConsultingUserHome', 'Get-HubProjectsIaRoot',
   'ConvertTo-ConsultingSlug', 'Read-ConsultingPrompt', 'Read-ConsultingPromptYesNo', 'Read-ConsultingChoice',
   'Test-ConsultingTargetPath', 'Copy-ConsultingSkeleton', 'Copy-ProjectOverlay',
   'Rename-ConsultingArchimateTemplates', 'Get-ConsultingTokenReplacements', 'Invoke-ConsultingTokenReplacement',

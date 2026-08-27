@@ -25,7 +25,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$hubRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$hubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 Import-Module (Join-Path $hubRoot 'scripts\lib\ConsultingCopilot.psm1') -Force
 
 function Invoke-RefreshOne {

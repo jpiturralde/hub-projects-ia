@@ -144,7 +144,7 @@ Describe 'Move-HubProjectsIa' {
 
       $registryPath = Join-Path $hub 'hub-registry.json'
       $registry = Get-Content $registryPath -Raw | ConvertFrom-Json
-      $registry.projects[0].absolutePath = 'C:\fuera\del\hub'
+      $registry.projects[0].absolutePath = Join-Path $TestDrive 'outside-hub'
       Set-Content -LiteralPath $registryPath -Value (($registry | ConvertTo-Json -Depth 8) + "`n") -Encoding UTF8
 
       $result = Test-HubMoveResult -HubRoot $hub
@@ -183,7 +183,7 @@ Describe 'Move-HubProjectsIa' {
       $validation.Ok | Should -Be $true
 
       $backupRegistry = Get-Content (Join-Path $backupPath 'hub-registry.json') -Raw | ConvertFrom-Json
-      [string]$backupRegistry.projects[0].absolutePath | Should -BeLike '*\move-source\*'
+      [string]$backupRegistry.projects[0].absolutePath | Should -BeLike '*move-source*'
     }
   }
 

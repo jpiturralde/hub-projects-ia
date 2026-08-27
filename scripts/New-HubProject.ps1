@@ -85,7 +85,7 @@ $ErrorActionPreference = 'Stop'
 $ModulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
 Import-Module $ModulePath -Force
 
-$HubRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$HubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 $ProjectsRoot = Join-Path $HubRoot 'projects'
 $RegistryPath = Join-Path $HubRoot 'hub-registry.json'
 $GeneratorScript = Join-Path $PSScriptRoot 'New-ConsultingCopilotProject.ps1'

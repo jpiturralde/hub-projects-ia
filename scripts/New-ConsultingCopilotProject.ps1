@@ -49,7 +49,7 @@ $ErrorActionPreference = 'Stop'
 $modulePath = Join-Path $PSScriptRoot 'lib\ConsultingCopilot.psm1'
 Import-Module $modulePath -Force
 
-$templateRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$templateRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 $skeletonPath = Join-Path $templateRoot 'skeleton'
 $skeletonMinimalPath = Join-Path $templateRoot 'skeleton-minimal'
 $overlayConsultingPath = Join-Path $templateRoot 'overlays\consulting'
