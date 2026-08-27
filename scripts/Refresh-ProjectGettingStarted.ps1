@@ -33,19 +33,26 @@ $hubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 function Invoke-RefreshOne {
   param([string] $Path)
   $resolved = [System.IO.Path]::GetFullPath($Path)
+  if (-not (Test-Path -LiteralPath $resolved -PathType Container)) {
+    Write-Warning "Proyecto no encontrado (se omite): $resolved"
+    return
+  }
   $output = Update-ProjectGettingStartedFromMetadata -TargetPath $resolved
   Write-Host "OK $output"
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'Registry') {
-  $registryPath = Join-Path $hubRoot 'hub-registry.json'
-  if (-not (Test-Path -LiteralPath $registryPath)) {
-    throw "No se encontró hub-registry.json en: $registryPath"
-  }
-  $registry = Get-Content -LiteralPath $registryPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  foreach ($project in @($registry.projects)) {
-    if (-not $project.absolutePath) { continue }
-    Invoke-RefreshOne -Path ([string]$project.absolutePath)
+  $registry = Read-HubRegistry -HubRoot $hubRoot
+  foreach ($item in @($registry.Projects)) {
+    if ($item.ResolveError) {
+      Write-Warning "No se pudo resolver $($item.FolderName): $($item.ResolveError)"
+      continue
+    }
+    if (-not $item.Exists) {
+      Write-Warning "Proyecto registrado no encontrado ($($item.FolderName)): $($item.ResolvedPath)"
+      continue
+    }
+    Invoke-RefreshOne -Path $item.ResolvedPath
   }
   return
 }

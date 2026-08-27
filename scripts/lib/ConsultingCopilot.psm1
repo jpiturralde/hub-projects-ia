@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'Platform.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'GentleAi.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'HubRegistry.psm1') -Force
 
 $script:TextExtensions = @(
   '.md', '.mdc', '.json', '.lua', '.yml', '.yaml', '.xml', '.drawio', '.gitignore', '.ps1', '.puml', '.mdx'
@@ -757,37 +758,51 @@ function Update-HubRegistryPaths {
     [Parameter(Mandatory = $true)][string] $OldHubRoot
   )
 
-  $registryPath = Join-Path $HubRoot 'hub-registry.json'
+  $registryPath = Get-HubRegistryPath -HubRoot $HubRoot
   if (-not (Test-Path -LiteralPath $registryPath)) {
     return [pscustomobject]@{ Updated = $false; Path = $registryPath; ProjectCount = 0 }
   }
 
   $hub = Resolve-HubRootPath $HubRoot
   $oldHub = Resolve-HubRootPath $OldHubRoot
-  $raw = [System.IO.File]::ReadAllText($registryPath, [System.Text.UTF8Encoding]::new($false))
-  $registry = $raw | ConvertFrom-Json
-  $projects = @($registry.projects)
+  $current = Read-HubRegistry -HubRoot $HubRoot -RegistryPath $registryPath
+  $projects = [System.Collections.Generic.List[object]]::new()
   $updatedCount = 0
 
-  foreach ($project in $projects) {
-    if (-not $project.absolutePath) { continue }
-    $current = [string]$project.absolutePath
-    if ($current.StartsWith($oldHub, [StringComparison]::OrdinalIgnoreCase)) {
-      $suffix = $current.Substring($oldHub.Length)
-      $project.absolutePath = $hub + $suffix
-      $updatedCount++
+  foreach ($item in @($current.Projects)) {
+    $entry = $item.Entry
+    # Schema v2 relativo: no cambia al mover el hub.
+    if ($entry.PSObject.Properties.Name -contains 'relativePath' -and -not [string]::IsNullOrWhiteSpace([string]$entry.relativePath)) {
+      $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project $entry -ExternalPolicy KeepExternal
+      $projects.Add($migrated.Project) | Out-Null
+      continue
     }
+    if ($entry.PSObject.Properties.Name -contains 'absolutePath' -and -not [string]::IsNullOrWhiteSpace([string]$entry.absolutePath)) {
+      $currentPath = [string]$entry.absolutePath
+      $map = @{}
+      foreach ($prop in @($entry.PSObject.Properties)) { $map[$prop.Name] = $prop.Value }
+      if ($currentPath.StartsWith($oldHub, [StringComparison]::OrdinalIgnoreCase)) {
+        $suffix = $currentPath.Substring($oldHub.Length)
+        $map['absolutePath'] = $hub + $suffix
+        $updatedCount++
+      }
+      $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project ([pscustomobject]$map) -ExternalPolicy KeepExternal
+      $projects.Add($migrated.Project) | Out-Null
+      $updatedCount++
+      continue
+    }
+    $migrated = Convert-HubRegistryProjectToV2 -HubRoot $hub -Project $entry -ExternalPolicy KeepExternal
+    $projects.Add($migrated.Project) | Out-Null
   }
 
-  if ($updatedCount -gt 0) {
-    $json = ($registry | ConvertTo-Json -Depth 8) + "`n"
-    [System.IO.File]::WriteAllText($registryPath, $json, [System.Text.UTF8Encoding]::new($false))
-  }
+  $document = New-HubRegistryDocument -SchemaVersion 2 -Projects @($projects)
+  Write-HubRegistry -RegistryPath $registryPath -Document $document | Out-Null
 
   return [pscustomobject]@{
-    Updated = ($updatedCount -gt 0)
+    Updated = $true
     Path = $registryPath
     ProjectCount = $updatedCount
+    SchemaVersion = 2
   }
 }
 
@@ -855,21 +870,24 @@ function Test-HubMoveResult {
     $issues.Add("Estructura del hub incompleta. Falta: $missing")
   }
 
-  $registryPath = Join-Path $hub 'hub-registry.json'
+  $registryPath = Get-HubRegistryPath -HubRoot $hub
   if (-not (Test-Path -LiteralPath $registryPath)) {
     $issues.Add('No se encontró hub-registry.json.')
     return [pscustomobject]@{ Ok = $false; HubRoot = $hub; Issues = @($issues) }
   }
 
-  $registry = Get-Content -LiteralPath $registryPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  foreach ($project in @($registry.projects)) {
-    if (-not $project.absolutePath) { continue }
-    $projectPath = [string]$project.absolutePath
-    if (-not $projectPath.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
-      $issues.Add("absolutePath fuera del hub ($($project.folderName)): $projectPath")
+  $registry = Read-HubRegistry -HubRoot $hub -RegistryPath $registryPath
+  foreach ($item in @($registry.Projects)) {
+    if ($item.ResolveError) {
+      $issues.Add("No se pudo resolver ($($item.FolderName)): $($item.ResolveError)")
+      continue
     }
-    if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) {
-      $issues.Add("Proyecto registrado no encontrado ($($project.folderName)): $projectPath")
+    $projectPath = $item.ResolvedPath
+    if (-not (Test-HubPathIsChildOf -ChildPath $projectPath -ParentPath $hub) -and -not (Compare-HubPath -Left $projectPath -Right $hub)) {
+      $issues.Add("Ruta de proyecto fuera del hub ($($item.FolderName)): $projectPath")
+    }
+    if (-not $item.Exists) {
+      $issues.Add("Proyecto registrado no encontrado ($($item.FolderName)): $projectPath")
     }
 
     $mcpPath = Join-HubPath $projectPath '.cursor' 'mcp.json'
@@ -887,17 +905,16 @@ function Test-HubMoveResult {
           if ($backlogArgs[$i] -eq '--cwd' -and ($i + 1) -lt $backlogArgs.Count) {
             $cwd = [string]$backlogArgs[$i + 1]
             if ($cwd -and -not (Test-Path -LiteralPath $cwd -PathType Container)) {
-              $issues.Add("Backlog MCP --cwd inválido ($($project.folderName)): $cwd")
+              $issues.Add("Backlog MCP --cwd inválido ($($item.FolderName)): $cwd")
             }
-            elseif ($cwd -and -not $cwd.StartsWith($hub, [StringComparison]::OrdinalIgnoreCase)) {
-              $issues.Add("Backlog MCP --cwd fuera del hub ($($project.folderName)): $cwd")
+            elseif ($cwd -and -not ((Test-HubPathIsChildOf -ChildPath $cwd -ParentPath $hub) -or (Compare-HubPath -Left $cwd -Right $hub))) {
+              $issues.Add("Backlog MCP --cwd fuera del hub ($($item.FolderName)): $cwd")
             }
           }
         }
       }
-    }
-    catch {
-      $issues.Add("mcp.json inválido ($($project.folderName)): $mcpPath")
+    } catch {
+      $issues.Add("MCP inválido ($($item.FolderName)): $($_.Exception.Message)")
     }
   }
 
@@ -1542,6 +1559,45 @@ function Get-HubCommandExecutablePaths {
   param([Parameter(Mandatory = $true)][string] $Name, [switch] $AllowWindowsExecutable)
   Platform\Get-HubCommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable
 }
+function Get-HubRegistryPath {
+  param([Parameter(Mandatory = $true)][string] $HubRoot)
+  HubRegistry\Get-HubRegistryPath -HubRoot $HubRoot
+}
+function Read-HubRegistry {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [string] $RegistryPath)
+  HubRegistry\Read-HubRegistry -HubRoot $HubRoot -RegistryPath $RegistryPath
+}
+function Resolve-HubProjectPath {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [Parameter(Mandatory = $true)] $Project)
+  HubRegistry\Resolve-HubProjectPath -HubRoot $HubRoot -Project $Project
+}
+function Migrate-HubRegistryToV2 {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [string] $RegistryPath,
+    [ValidateSet('Reject', 'KeepExternal')] [string] $ExternalPolicy = 'Reject',
+    [switch] $DryRun,
+    [switch] $NoBackup
+  )
+  HubRegistry\Migrate-HubRegistryToV2 -HubRoot $HubRoot -RegistryPath $RegistryPath -ExternalPolicy $ExternalPolicy -DryRun:$DryRun -NoBackup:$NoBackup
+}
+function Test-HubRegistryPortability {
+  param([Parameter(Mandatory = $true)][string] $HubRoot, [string] $RegistryPath)
+  HubRegistry\Test-HubRegistryPortability -HubRoot $HubRoot -RegistryPath $RegistryPath
+}
+function Add-HubRegistryProject {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][hashtable] $Entry,
+    [string] $RegistryPath,
+    [switch] $Force
+  )
+  HubRegistry\Add-HubRegistryProject -HubRoot $HubRoot -Entry $Entry -RegistryPath $RegistryPath -Force:$Force
+}
+function Write-HubRegistry {
+  param([Parameter(Mandatory = $true)][string] $RegistryPath, [Parameter(Mandatory = $true)] $Document)
+  HubRegistry\Write-HubRegistry -RegistryPath $RegistryPath -Document $Document
+}
 
 Export-ModuleMember -Function @(
   'Get-ConsultingUserHome', 'Get-HubProjectsIaRoot',
@@ -1554,6 +1610,8 @@ Export-ModuleMember -Function @(
   'Get-GentleAiEnvironment', 'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
   'Resolve-GentleAiScopeDecision', 'Invoke-GentleAiInstall', 'Invoke-SkillRegistryRefresh',
   'Resolve-GentleAiPreflight', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
+  'Get-HubRegistryPath', 'Read-HubRegistry', 'Resolve-HubProjectPath', 'Migrate-HubRegistryToV2',
+  'Test-HubRegistryPortability', 'Add-HubRegistryProject', 'Write-HubRegistry',
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',

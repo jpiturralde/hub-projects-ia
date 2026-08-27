@@ -117,13 +117,17 @@ Describe 'Move-HubProjectsIa' {
       Copy-Item -LiteralPath $oldHub -Destination $newHub -Recurse -Force
       $updates = Update-HubPathReferences -HubRoot $newHub -OldHubRoot $oldHub
 
-      $updates.Registry.ProjectCount | Should -Be 2
+      $updates.Registry.SchemaVersion | Should -Be 2
       $updates.UpdatedMcpFiles.Count | Should -Be 2
 
       $registry = Get-Content (Join-Path $newHub 'hub-registry.json') -Raw | ConvertFrom-Json
+      $registry.schemaVersion | Should -Be 2
       foreach ($project in @($registry.projects)) {
-        $project.absolutePath | Should -BeLike "$newHub*"
-        (Test-Path -LiteralPath $project.absolutePath) | Should -Be $true
+        $project.PSObject.Properties.Name | Should -Contain 'relativePath'
+        $project.PSObject.Properties.Name | Should -Not -Contain 'absolutePath'
+        $resolved = Resolve-HubProjectPath -HubRoot $newHub -Project $project
+        $resolved | Should -BeLike "$newHub*"
+        (Test-Path -LiteralPath $resolved) | Should -Be $true
       }
 
       foreach ($mcpFile in $updates.UpdatedMcpFiles) {

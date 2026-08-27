@@ -432,16 +432,16 @@ Schema objetivo:
 
 Tareas:
 
-- [ ] Implementar lectura del schema actual.
-- [ ] Implementar lectura del schema 2.
-- [ ] Convertir `absolutePath` a `relativePath` solo si la ruta pertenece al hub.
-- [ ] Rechazar o solicitar decisión para rutas externas al hub.
-- [ ] Preservar metadata desconocida durante la migración.
-- [ ] Resolver en runtime `Join-Path $HubRoot $project.relativePath`.
-- [ ] Escribir JSON de forma determinista.
-- [ ] Crear backup antes de una migración real.
-- [ ] Hacer la migración idempotente.
-- [ ] Validar que no queden rutas personales Windows o Linux en el registro.
+- [x] Implementar lectura del schema actual.
+- [x] Implementar lectura del schema 2.
+- [x] Convertir `absolutePath` a `relativePath` solo si la ruta pertenece al hub.
+- [x] Rechazar o solicitar decisión para rutas externas al hub.
+- [x] Preservar metadata desconocida durante la migración.
+- [x] Resolver en runtime `Join-Path $HubRoot $project.relativePath`.
+- [x] Escribir JSON de forma determinista.
+- [x] Crear backup antes de una migración real.
+- [x] Hacer la migración idempotente.
+- [x] Validar que no queden rutas personales Windows o Linux en el registro.
 
 Criterios de salida:
 

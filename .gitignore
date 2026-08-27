@@ -4,3 +4,4 @@ projects/*
 
 # Mantener exclusiones operativas del entorno local si aplica
 .cursor/projects/
+hub-registry.json.bak-*

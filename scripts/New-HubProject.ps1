@@ -87,23 +87,11 @@ Import-Module $ModulePath -Force
 
 $HubRoot = Get-HubProjectsIaRoot -ScriptRoot $PSScriptRoot
 $ProjectsRoot = Join-Path $HubRoot 'projects'
-$RegistryPath = Join-Path $HubRoot 'hub-registry.json'
+$RegistryPath = Get-HubRegistryPath -HubRoot $HubRoot
 $GeneratorScript = Join-Path $PSScriptRoot 'New-ConsultingCopilotProject.ps1'
 
 if (-not (Test-Path -LiteralPath $ProjectsRoot)) {
   New-Item -ItemType Directory -Path $ProjectsRoot -Force | Out-Null
-}
-
-function Get-HubRegistry {
-  param([string] $Path)
-  if (-not (Test-Path -LiteralPath $Path)) {
-    return [ordered]@{ schemaVersion = 1; projects = @() }
-  }
-  $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
-  if ([string]::IsNullOrWhiteSpace($raw)) {
-    return [ordered]@{ schemaVersion = 1; projects = @() }
-  }
-  return ($raw | ConvertFrom-Json)
 }
 
 function Resolve-HubProjectFolderName {
@@ -152,26 +140,7 @@ function Add-HubRegistryEntry {
     [string] $RegistryFile,
     [hashtable] $Entry
   )
-
-  $registry = Get-HubRegistry -Path $RegistryFile
-  $projects = @()
-  if ($registry.projects) {
-    $projects = @($registry.projects)
-  }
-
-  $existing = $projects | Where-Object { $_.folderName -eq $Entry.folderName }
-  if ($existing -and -not $Force) {
-    throw "folderName ya registrado en hub-registry.json: $($Entry.folderName). Usá -Force si querés regenerar."
-  }
-
-  $projects = @($projects | Where-Object { $_.folderName -ne $Entry.folderName })
-  $projects += [pscustomobject]$Entry
-
-  $out = [ordered]@{
-    schemaVersion = 1
-    projects      = $projects
-  }
-  ($out | ConvertTo-Json -Depth 6) + "`n" | Set-Content -LiteralPath $RegistryFile -Encoding UTF8
+  Add-HubRegistryProject -HubRoot $HubRoot -Entry $Entry -RegistryPath $RegistryFile -Force:$Force | Out-Null
 }
 
 if ([string]::IsNullOrWhiteSpace($StackProfile)) {
@@ -291,7 +260,7 @@ if (Test-Path -LiteralPath $generatedMetaPath) {
 
 $entry = [ordered]@{
   folderName     = $folderName
-  absolutePath   = $TargetPath
+  relativePath   = "projects/$folderName"
   stackProfile   = $registryProfile
   createdAt      = (Get-Date).ToString('o')
   gitInitialized = $gitInitialized
