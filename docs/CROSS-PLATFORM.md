@@ -20,7 +20,9 @@ El hub genera proyectos hijos con **un solo motor: PowerShell 7 (`pwsh`)** en Wi
 | Git | Sí (alta de hijos) | `New-HubProject` hace `git init` en el hijo. |
 | Gentle AI CLI | Según perfil | Requerido en ConsultingAI / Full / GentleAi. |
 | Go | Sólo si instalás Gentle AI | Flujo de instalación del CLI estable. |
-| Node.js / Pandoc / Backlog / Archi | Opcional | MCP y DOCX; el preflight los marca sin bloquear el alta si no los pedís. |
+| Node.js / npm | Requerido si activás Draw.io MCP o Backlog MCP | LTS nativo del SO (no `npm.exe` desde WSL). |
+| Backlog.md CLI | Requerido si `-IncludeBacklogMcp` | Reutilizado si `backlog --version` ok; si no, instalar con `npm install -g backlog.md@latest --include=optional` (o `-BacklogCliChoice I`). |
+| Pandoc / Archi | Opcional | DOCX y Archi MCP; el preflight los marca sin bloquear el alta si no los pedís. |
 | `jq` | **No** | El registry usa PowerShell / `System.Text.Json`. |
 | `shellcheck` | Opcional | Valida `./scripts/hub` en Ubuntu/WSL. |
 

@@ -58,7 +58,9 @@ param(
   [switch] $Force,
   # Solo tests / automatización no interactiva (I|X|C y G|P|X).
   [string] $GentleAiCliChoice,
-  [string] $GentleAiScopeChoice
+  [string] $GentleAiScopeChoice,
+  # Solo tests / automatización no interactiva (I=instalar, X=cancelar).
+  [string] $BacklogCliChoice
 )
 
 Set-StrictMode -Version Latest
@@ -174,6 +176,13 @@ if (-not $PSBoundParameters.ContainsKey('IncludeBacklogMcp')) {
   $IncludeBacklogMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Backlog?' $false
 }
 if ($IncludeBacklogMcp -and [string]::IsNullOrWhiteSpace($BacklogMcpCwd)) { $BacklogMcpCwd = $finalTargetPath }
+if ($IncludeBacklogMcp) {
+  $backlogParams = @{ Mode = 'Auto' }
+  if (-not [string]::IsNullOrWhiteSpace($BacklogCliChoice)) {
+    $backlogParams['Choice'] = $BacklogCliChoice
+  }
+  $null = Ensure-BacklogCli @backlogParams
+}
 if (-not $PSBoundParameters.ContainsKey('IncludeArchiMcp')) {
   $IncludeArchiMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Archi?' $false
 }

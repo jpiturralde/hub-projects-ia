@@ -85,7 +85,10 @@ param(
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipGitInit,
   [switch] $SkipOpenCursor,
-  [switch] $Force
+  [switch] $Force,
+  [string] $GentleAiCliChoice,
+  [string] $GentleAiScopeChoice,
+  [string] $BacklogCliChoice
 )
 
 Set-StrictMode -Version Latest
@@ -230,6 +233,9 @@ if ($PSBoundParameters.ContainsKey('IncludeBacklogMcp')) { $genParams.IncludeBac
 if ($PSBoundParameters.ContainsKey('IncludeArchiMcp')) { $genParams.IncludeArchiMcp = $IncludeArchiMcp }
 if ($PSBoundParameters.ContainsKey('IncludeClaudeCoworkLayer')) { $genParams.IncludeClaudeCoworkLayer = $IncludeClaudeCoworkLayer }
 if ($SkipSkillRegistryRefresh) { $genParams.SkipSkillRegistryRefresh = $true }
+if (-not [string]::IsNullOrWhiteSpace($GentleAiCliChoice)) { $genParams.GentleAiCliChoice = $GentleAiCliChoice }
+if (-not [string]::IsNullOrWhiteSpace($GentleAiScopeChoice)) { $genParams.GentleAiScopeChoice = $GentleAiScopeChoice }
+if (-not [string]::IsNullOrWhiteSpace($BacklogCliChoice)) { $genParams.BacklogCliChoice = $BacklogCliChoice }
 $genParams.SkipHandoffSummary = $true
 
 Write-Host "Hub: $HubRoot"
