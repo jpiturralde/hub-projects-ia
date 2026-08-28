@@ -93,6 +93,7 @@ function New-FakeCommandSet {
     @{ Name = 'go'; ExitCode = 0 }
     @{ Name = 'git'; ExitCode = 0 }
     @{ Name = 'node'; ExitCode = 0 }
+    @{ Name = 'npm'; ExitCode = 0 }
     @{ Name = 'npx'; ExitCode = 0 }
     @{ Name = 'backlog'; ExitCode = 0 }
     @{ Name = 'cursor'; ExitCode = 0 }

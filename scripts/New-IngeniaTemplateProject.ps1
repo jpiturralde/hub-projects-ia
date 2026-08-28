@@ -71,7 +71,10 @@ param(
 
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipHandoffSummary,
-  [switch] $Force
+  [switch] $Force,
+  [string] $GentleAiCliChoice,
+  [string] $GentleAiScopeChoice,
+  [string] $BacklogCliChoice
 )
 
 $main = Join-Path $PSScriptRoot 'New-ConsultingCopilotProject.ps1'

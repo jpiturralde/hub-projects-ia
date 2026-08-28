@@ -83,9 +83,27 @@ Si usás **nvm**, asegurate de que el **proceso que lanza los MCP** herede el mi
 
 ## 2. MCP Backlog ([Backlog.md](https://github.com/MrLesk/Backlog.md))
 
-**Necesitás:** el ejecutable `backlog` en el **PATH** (o la **ruta absoluta** al binario en `.cursor/mcp.json` → `command`).
+**Necesitás:** Node.js LTS + npm, y el ejecutable `backlog` en el **PATH** del mismo SO donde corre Cursor/el generador.
 
-El servidor MCP se invoca como: `backlog mcp start` (el script del template suele añadir `--cwd` con la ruta del repo).
+El generador (`New-ConsultingCopilotProject.ps1` / `New-HubProject.ps1`) **no escribe** la entrada MCP de Backlog hasta validar el CLI:
+
+1. Detecta `backlog` con `Get-Command` (filtrando binarios Windows bajo `/mnt/*` en WSL).
+2. Valida con `backlog --version`.
+3. Si ya hay una instalación nativa válida, **la reutiliza** (no reinstala) e informa la ruta.
+4. Si falta, en modo interactivo ofrece instalar; en no interactivo requiere `-BacklogCliChoice I` (instalar) o `X` (cancelar).
+5. Instalación (mismo host/SO del script; no usa `npm.exe` de Windows desde WSL):
+
+   ```bash
+   npm install -g backlog.md@latest --include=optional
+   ```
+
+   `--include=optional` es necesario: el binario de plataforma va en dependencias opcionales.
+
+6. Sólo tras validar de nuevo `backlog --version` se escribe `.cursor/mcp.json` con `command: "backlog"`.
+
+Si cancelás, falta npm/node, falla `npm install` o `--version` no responde: **no** queda una entrada MCP rota; el error indica el comando manual de arriba.
+
+El servidor MCP se invoca como: `backlog mcp start` (el script añade `--cwd` con la ruta del repo).
 
 **Referencias oficiales**
 
@@ -95,10 +113,10 @@ El servidor MCP se invoca como: `backlog mcp start` (el script del template suel
 ### Windows
 
 1. Instalá [Node.js LTS](https://nodejs.org/) (ver §1).
-2. Instalación global del CLI (elige una):
+2. Instalación global del CLI:
 
    ```powershell
-   npm install -g backlog.md
+   npm install -g backlog.md@latest --include=optional
    ```
 
    Con **Bun** (opcional): [https://bun.sh](https://bun.sh) → `bun add -g backlog.md`.
@@ -106,11 +124,11 @@ El servidor MCP se invoca como: `backlog mcp start` (el script del template suel
 3. Verificación:
 
    ```powershell
-   backlog --help
+   backlog --version
    backlog mcp start --help
    ```
 
-4. Si `backlog` no se encuentra, localizá el global bin de npm y agregalo al PATH, o usá ruta absoluta en el script / `mcp.json`, por ejemplo:
+4. Si `backlog` no se encuentra, localizá el global bin de npm y agregalo al PATH:
 
    ```powershell
    npm config get prefix
@@ -119,31 +137,37 @@ El servidor MCP se invoca como: `backlog mcp start` (el script del template suel
 
 ### macOS
 
-**Opción A — Homebrew** (como en varios README internos):
+**Opción A — Homebrew:**
 
 ```bash
 brew install backlog-md
-backlog --help
+backlog --version
 ```
 
-**Opción B — npm / Bun**
+**Opción B — npm:**
 
 ```bash
-npm install -g backlog.md
-# o: bun add -g backlog.md
+npm install -g backlog.md@latest --include=optional
+backlog --version
 ```
 
 ### Linux y WSL
 
 ```bash
-npm install -g backlog.md
-# o, si usás Homebrew on Linux: brew install backlog-md
-backlog --help
+npm install -g backlog.md@latest --include=optional
+backlog --version
 ```
 
-**WSL:** igual que Linux **dentro de la distro** si ahí corrés el IDE o los MCP; si el entorno es Windows nativo, instalá el CLI en Windows (§ Windows).
+**WSL:** instalá Node y Backlog **dentro de la distro**. No reutilices un `backlog`/`npm` de Windows bajo `/mnt/c` (el generador los rechaza). Si Cursor corre en Windows nativo, instalá el CLI en Windows (§ Windows).
 
-**Script `New-IngeniaCursorProject.ps1`:** si activás MCP backlog, solo pregunta la **ruta absoluta del repo** para `--cwd` (default: la carpeta destino del proyecto) y escribe `command: backlog` y `args: ["mcp","start","--cwd",…]` fijos. Si el ejecutable no está en el `PATH` del proceso MCP, editá a mano `.cursor/mcp.json` y poné la ruta absoluta al binario en `command` (ver § Windows, `Get-Command backlog`).
+**Scripts del hub:** con `-IncludeBacklogMcp`, el generador garantiza el CLI antes de escribir MCP. Automatización:
+
+```powershell
+pwsh -File ./scripts/New-HubProject.ps1 -StackProfile ConsultingAI `
+  -IncludeBacklogMcp -BacklogCliChoice I ...
+```
+
+`-BacklogCliChoice X` cancela sin escribir la entrada. Sin choice en entorno no interactivo: error claro (no instala en silencio).
 
 ---
 
@@ -211,8 +235,8 @@ En macOS suele citarse `brew install pandoc`. En Windows: instalador desde la p�
 
 | SO | Draw.io MCP | Backlog MCP | Archi MCP |
 |----|-------------|-------------|-----------|
-| **Windows** | Node LTS desde nodejs.org | `npm i -g backlog.md` | Archi + jArchi + Node + ruta `index.js` |
-| **macOS** | Node o Homebrew `brew install node` | `brew install backlog-md` o `npm i -g backlog.md` | Igual |
-| **Linux / WSL** | Node desde distro o nodejs.org | `npm i -g backlog.md` (o brew en Linux) | Igual; atención a si MCP corre en Windows vs WSL |
+| **Windows** | Node LTS desde nodejs.org | `npm i -g backlog.md@latest --include=optional` | Archi + jArchi + Node + ruta `index.js` |
+| **macOS** | Node o Homebrew `brew install node` | `brew install backlog-md` o `npm i -g backlog.md@latest --include=optional` | Igual |
+| **Linux / WSL** | Node desde distro o nodejs.org | `npm i -g backlog.md@latest --include=optional` (nativo WSL; no `/mnt/c`) | Igual; atención a si MCP corre en Windows vs WSL |
 
 *Última actualización: alineado al template Ingenia (`ingenia-template-ia`) y a `mcp.json.example` del skeleton.*

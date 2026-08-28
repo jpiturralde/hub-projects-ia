@@ -52,5 +52,15 @@ Es opcional y default `false`. Si se incluye, `CLAUDE.md` importa sólo `PROJECT
 
 El generador nunca escribe Engram en `.cursor/mcp.json`. Gentle AI administra Engram en el alcance que corresponda; el MCP local contiene sólo Draw.io, Backlog o Archi.
 
-Después de actualizar el binario, usar `gentle-ai sync`. Para diagnóstico, `gentle-ai doctor` y `scripts/Test-GentleAiProject.ps1`.
+### Backlog.md
+
+Si el perfil/toggle incluye MCP Backlog (`-IncludeBacklogMcp`):
+
+- Requiere **Node.js** y **npm** nativos del SO (en WSL, dentro de la distro; no `/mnt/c`).
+- Reutiliza un `backlog` válido en PATH tras `backlog --version`.
+- Si falta: interactivo ofrece instalar; no interactivo usa `-BacklogCliChoice I|X` (sin instalar en silencio).
+- Comando: `npm install -g backlog.md@latest --include=optional`.
+- No escribe la entrada MCP si la validación falla o el usuario cancela.
+
+Después de actualizar el binario Gentle AI, usar `gentle-ai sync`. Para diagnóstico, `gentle-ai doctor` y `scripts/Test-GentleAiProject.ps1`.
 

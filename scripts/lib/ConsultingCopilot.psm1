@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'Platform.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'GentleAi.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Backlog.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'HubRegistry.psm1') -Force
 
 $script:TextExtensions = @(
@@ -305,6 +306,58 @@ function Resolve-GentleAiPreflight {
     }.GetNewClosure()
   }
   GentleAi\Resolve-GentleAiPreflight @params
+}
+
+function Ensure-BacklogCli {
+  param(
+    [ValidateSet('Auto', 'Existing')] [string] $Mode = 'Auto',
+    [string] $Choice,
+    [scriptblock] $NpmInvoker,
+    [scriptblock] $VersionInvoker
+  )
+  $params = @{ Mode = $Mode }
+  if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+    $params['Choice'] = $Choice
+  } else {
+    $params['PromptChoice'] = {
+      Read-ConsultingChoice `
+        -Message 'El perfil requiere Backlog.md (MCP) y no se encontró un CLI usable' `
+        -Choices ([ordered]@{ I = 'instalar con npm (recomendado)'; X = 'cancelar' }) `
+        -DefaultKey 'I'
+    }
+  }
+  if ($NpmInvoker) { $params['NpmInvoker'] = $NpmInvoker }
+  if ($VersionInvoker) { $params['VersionInvoker'] = $VersionInvoker }
+  $result = Backlog\Ensure-BacklogCli @params
+  if ($result.Status -eq 'Cancelled') {
+    throw @"
+Operación cancelada: no se generará la entrada MCP de Backlog sin un CLI usable.
+Instalá manualmente y volvé a ejecutar:
+  $(Get-BacklogManualInstallHint)
+Validá con: backlog --version
+"@
+  }
+  return $result
+}
+
+function Resolve-BacklogCliStatus {
+  param([string[]] $RawPaths, [scriptblock] $VersionInvoker)
+  $params = @{}
+  if ($null -ne $RawPaths) { $params['RawPaths'] = $RawPaths }
+  if ($VersionInvoker) { $params['VersionInvoker'] = $VersionInvoker }
+  Backlog\Resolve-BacklogCliStatus @params
+}
+
+function Install-BacklogCli {
+  param([scriptblock] $NpmInvoker, [scriptblock] $VersionInvoker)
+  $params = @{}
+  if ($NpmInvoker) { $params['NpmInvoker'] = $NpmInvoker }
+  if ($VersionInvoker) { $params['VersionInvoker'] = $VersionInvoker }
+  Backlog\Install-BacklogCli @params
+}
+
+function Get-BacklogManualInstallHint {
+  Backlog\Get-BacklogManualInstallHint
 }
 
 function Get-ConsultingMcpServers {
@@ -1489,11 +1542,21 @@ function Get-ConsultingCopilotPreflightDiagnostic {
       ok = @(Get-CommandExecutablePaths -Name 'pandoc').Count -eq 1
       detail = 'Opcional para regenerar DOCX.'
     })
+    $backlogStatus = Resolve-BacklogCliStatus
+    $backlogOk = $backlogStatus.Status -eq 'Ok'
+    $backlogDetail = switch ($backlogStatus.Status) {
+      'Ok' { "Se reutilizará: $($backlogStatus.Path)" }
+      'Missing' { "Opcional salvo que actives MCP Backlog. Manual: $(Get-BacklogManualInstallHint)" }
+      'WindowsOriginRejected' { $backlogStatus.Message }
+      'Duplicate' { $backlogStatus.Message }
+      'Invalid' { $backlogStatus.Message }
+      default { $backlogStatus.Message }
+    }
     $checks.Add([pscustomobject]@{
       group = 'consulting'
       label = 'Backlog CLI'
-      ok = @(Get-CommandExecutablePaths -Name 'backlog').Count -eq 1
-      detail = 'Opcional.'
+      ok = $backlogOk
+      detail = $backlogDetail
     })
   }
 
@@ -1626,6 +1689,7 @@ Export-ModuleMember -Function @(
   'Resolve-GentleAiPreflight', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
   'Get-HubRegistryPath', 'Read-HubRegistry', 'Resolve-HubProjectPath', 'Migrate-HubRegistryToV2',
   'Test-HubRegistryPortability', 'Add-HubRegistryProject', 'Write-HubRegistry',
+  'Ensure-BacklogCli', 'Resolve-BacklogCliStatus', 'Install-BacklogCli', 'Get-BacklogManualInstallHint',
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',
