@@ -38,6 +38,15 @@
       "initiativeId": "PREV-2142"
     },
     {
+      "folderName": "msfi-prev-2177",
+      "relativePath": "projects/msfi-prev-2177",
+      "stackProfile": "ConsultingAI",
+      "gitInitialized": true,
+      "createdAt": "2026-08-27T19:33:14.7075701+00:00",
+      "clientSlug": "msfi",
+      "initiativeId": "PREV-2177"
+    },
+    {
       "folderName": "slug-cod01",
       "relativePath": "projects/slug-cod01",
       "stackProfile": "Full",
