@@ -62,3 +62,30 @@ Describe 'Copy-ProjectOnboardingLayer' {
     Test-Path -LiteralPath $skillPath | Should -Be $true
   }
 }
+
+Describe 'Copy-StartiaMcpPolicy' {
+  BeforeEach {
+    $script:sandbox = Initialize-TestSandbox -PesterTestDrive $TestDrive
+    $script:sourceRoot = $script:repoRoot
+    $script:targetPath = Join-Path $script:sandbox.Root 'startia-target'
+    Register-TestSandboxWrite -Path $script:targetPath
+    New-Item -ItemType Directory -Path $script:targetPath -Force | Out-Null
+  }
+
+  AfterEach {
+    Remove-TestSandbox
+  }
+
+  It 'copia la rule startia-mcp-skills-policy' {
+    Copy-StartiaMcpPolicy -SourceRoot $script:sourceRoot -TargetPath $script:targetPath
+    $rulePath = Join-Path $script:targetPath '.cursor\rules\startia-mcp-skills-policy.mdc'
+    Test-Path -LiteralPath $rulePath | Should -Be $true
+  }
+
+  It 'falla si falta el overlay fuente' {
+    $badRoot = Join-Path $script:sandbox.Root 'no-overlay-hub'
+    New-Item -ItemType Directory -Path $badRoot -Force | Out-Null
+    { Copy-StartiaMcpPolicy -SourceRoot $badRoot -TargetPath $script:targetPath } |
+      Should -Throw '*IncludeStartiaMcp requiere la rule fuente*'
+  }
+}

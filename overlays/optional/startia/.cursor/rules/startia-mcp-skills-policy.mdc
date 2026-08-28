@@ -1,0 +1,12 @@
+---
+description: Política de skills Startia MCP — catálogo remoto vs materialización en el proyecto
+alwaysApply: false
+---
+
+# Startia MCP — política de skills
+
+- Catálogo de skills Ingenia: usar el MCP **startia** (`list_skills` / `get_skill`) para contenido genérico approved, cuando el server esté en `.cursor/mcp.json` y en verde.
+- **Wrappers del template (si existen en este repo):** skills bajo `.cursor/skills/` que el skeleton/hub haya copiado (p. ej. en perfiles Consulting: `architect-copilot`, `transcription-to-actions`, `consulting-*`) son capa hub legítima; usalos para el flujo del encargo. No asumas que existen en perfiles mínimos (GentleAi) si no están en disco.
+- Materializar un ZIP nuevo en **`.cursor/skills/` de este proyecto**, nunca en `~/.cursor/skills`.
+- No reinstalar en el user global skills ya aprobadas/publicadas en Startia.
+- Tooling personal (SDD, Cursor product skills, Engram) permanece en el alcance local del usuario; no lo muevas al proyecto salvo pedido explícito.

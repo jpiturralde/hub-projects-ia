@@ -151,6 +151,7 @@ $common = @{
   IncludeBacklogMcp = $false
   IncludeArchiMcp = $false
   IncludeClaudeCoworkLayer = $false
+  IncludeStartiaMcp = $true
   SkipSkillRegistryRefresh = $true
   SkipOpenCursor = $true
   Force = $true

@@ -60,10 +60,27 @@ Describe 'Perfil GentleAi' {
     }
 
     $mcpPath = Join-Path $target '.cursor\mcp.json'
-    if (Test-Path -LiteralPath $mcpPath) {
-      Get-McpServerNamesFromProject -ProjectRoot $target | Should -Not -Contain 'engram'
-    } else {
-      Set-ItResult -Inconclusive -Because 'El perfil GentleAi no crea mcp.json local por defecto'
+    Test-Path -LiteralPath $mcpPath | Should -Be $true
+    Get-McpServerNamesFromProject -ProjectRoot $target | Should -Not -Contain 'engram'
+    Get-McpServerNamesFromProject -ProjectRoot $target | Should -Contain 'startia'
+    Test-Path (Join-Path $target '.cursor\rules\startia-mcp-skills-policy.mdc') | Should -Be $true
+  }
+
+  It 'omite Startia en GentleAi con IncludeStartiaMcp false' {
+    $target = New-CharacterizationTarget -Name 'gentleai-no-startia' -Context $script:ctx
+    Invoke-CharacterizationGenerator -Context $script:ctx -TargetPath $target -Params @{
+      StackProfile = 'GentleAi'
+      GentleAiScope = 'Existing'
+      ProjectName = 'mi-app-no-startia'
+      IncludeStartiaMcp = $false
     }
+
+    Test-Path (Join-Path $target '.cursor\rules\startia-mcp-skills-policy.mdc') | Should -Be $false
+    $mcpPath = Join-Path $target '.cursor\mcp.json'
+    if (Test-Path -LiteralPath $mcpPath) {
+      Get-McpServerNamesFromProject -ProjectRoot $target | Should -Not -Contain 'startia'
+    }
+    $meta = Get-Content (Join-Path $target '.project-profile.json') -Raw | ConvertFrom-Json
+    $meta.includeStartiaMcp | Should -Be $false
   }
 }

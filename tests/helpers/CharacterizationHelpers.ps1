@@ -192,6 +192,7 @@ function Invoke-CharacterizationGenerator {
     IncludeBacklogMcp = $false
     IncludeArchiMcp = $false
     IncludeClaudeCoworkLayer = $false
+    IncludeStartiaMcp = $true
   }
   foreach ($key in $defaults.Keys) {
     if (-not $Params.ContainsKey($key)) { $Params[$key] = $defaults[$key] }
@@ -305,14 +306,14 @@ function Get-EquivalenceProjectSnapshot {
   $profilePath = Join-Path $root '.project-profile.json'
   if (Test-Path -LiteralPath $engagementPath) {
     $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp', 'includeStartiaMcp')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
         $metadata[$key] = $meta.$key
       }
     }
   } elseif (Test-Path -LiteralPath $profilePath) {
     $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope', 'includeStartiaMcp')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
         $metadata[$key] = $meta.$key
       }

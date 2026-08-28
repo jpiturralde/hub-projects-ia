@@ -69,6 +69,9 @@ param(
   [Parameter(Mandatory = $false)]
   [bool] $IncludeClaudeCoworkLayer = $false,
 
+  [Parameter(Mandatory = $false)]
+  [bool] $IncludeStartiaMcp = $true,
+
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipHandoffSummary,
   [switch] $Force,
@@ -90,5 +93,7 @@ foreach ($key in @($PSBoundParameters.Keys)) {
 if ($PSBoundParameters.ContainsKey('EngramPath')) {
   $params['EngramPath'] = $EngramPath
 }
+# Siempre reenviar el valor efectivo para no disparar prompt en el generador (CI / wrappers).
+$params['IncludeStartiaMcp'] = $IncludeStartiaMcp
 
 & $main @params -StackProfile ConsultingAI

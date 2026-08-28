@@ -50,7 +50,20 @@ Es opcional y default `false`. Si se incluye, `CLAUDE.md` importa sólo `PROJECT
 
 ## Engram y MCP
 
-El generador nunca escribe Engram en `.cursor/mcp.json`. Gentle AI administra Engram en el alcance que corresponda; el MCP local contiene sólo Draw.io, Backlog o Archi.
+El generador nunca escribe Engram en `.cursor/mcp.json`. Gentle AI administra Engram en el alcance que corresponda; el MCP local puede incluir Draw.io, Backlog, Archi y **Startia**.
+
+### Startia MCP (default ON)
+
+Por defecto (`-IncludeStartiaMcp:$true` en todos los perfiles) el generador:
+
+- Copia la rule `startia-mcp-skills-policy.mdc` (política de skills del catálogo Ingenia).
+- Agrega el server remoto `startia` en `.cursor/mcp.json` con `Authorization: Bearer ${env:GOVERNOR_PAT}` y `X-Tenant-Id: ${env:GOVERNOR_TENANT_ID}` (sin secretos en el repo).
+
+`New-HubProject.ps1` y `New-IngeniaTemplateProject.ps1` reenvían el valor efectivo (default ON, sin prompt). El prompt interactivo solo aparece si invocás `New-ConsultingCopilotProject.ps1` sin pasar el flag.
+
+Para apagarlo: `-IncludeStartiaMcp:$false`.
+
+Tras generar, configurá esas variables en el entorno del usuario (Windows: variables de usuario; Linux/WSL: `~/.bashrc`), reiniciá Cursor y verificá **Settings → Tools & MCP**.
 
 ### Backlog.md
 

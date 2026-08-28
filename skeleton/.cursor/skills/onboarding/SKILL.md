@@ -38,7 +38,8 @@ Pregunta: "¿Ya tenes esta carpeta abierta como workspace raiz?" Si no, detente 
 
 Guia al usuario a **Cursor Settings -> MCP**:
 
-- Listar servidores locales esperados según `.cursor/mcp.json`: `drawio` y opcionalmente `backlog`/`archi`.
+- Listar servidores locales esperados según `.cursor/mcp.json`: típicamente `drawio`, opcionalmente `backlog`/`archi`, y **`startia`** si figura en el JSON (default al generar).
+- Si **`startia`** está presente: confirmar que existen variables de entorno de usuario `GOVERNOR_PAT` y `GOVERNOR_TENANT_ID`, y que el server está en verde tras reiniciar Cursor. Detalle: `docs/GETTING-STARTED.md` y, si existe, `docs/MCP-PREREQUISITOS.md` § Startia.
 - Para ConsultingAI/GentleAi, verificar Engram por separado como integración administrada por Gentle AI. No agregarlo al MCP local.
 - Si **archi** o **backlog** tienen rutas placeholder, indicar editar `.cursor/mcp.json` (ver `docs/MCP-PREREQUISITOS.md`).
 

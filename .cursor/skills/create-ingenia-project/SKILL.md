@@ -29,12 +29,12 @@ flowchart TD
   prereq -->|no| install[Guiar scripts/Install-ConsultingCopilot.ps1]
   prereq -->|si| profile[Elegir perfil GentleAi / Consulting / Full]
   profile --> meta[Recolectar metadata según perfil]
-  meta --> mcp[Preguntar MCP opcionales backlog/archi]
+  meta --> mcp[Preguntar MCP: Startia default sí; backlog/archi opcionales]
   mcp --> preview[Mostrar resumen carpeta perfil comando]
   preview --> confirm{Usuario confirma?}
   confirm -->|si| run[Ejecutar New-HubProject.ps1]
   confirm -->|no| meta
-  run --> handoff[Indicar abrir hijo + bootstrap / CDD / SDD]
+  run --> handoff[Indicar abrir hijo + GOVERNOR_* + bootstrap / CDD / SDD]
 ```
 
 ### 1. Prerrequisitos
@@ -66,6 +66,7 @@ Si falta `gentle-ai` o `engram` (Full/GentleAi), guiar la instalación antes de 
 | Slug cliente | iplan | Carpeta: `projects/iplan-u01/` |
 | Iniciativa (display) | Gobierno de APIs | Tokens |
 | Código iniciativa | U01 | Sufijo de carpeta (minúsculas) |
+| MCP Startia | S (default) / N | Catálogo skills Ingenia; apagar con `-IncludeStartiaMcp:$false` |
 | MCP backlog | S/N | Backlog.md MCP |
 | MCP archi | S/N | archi-server MCP |
 
@@ -77,6 +78,7 @@ Carpeta por defecto: `projects/{client-slug}-{initiative-id}/` (ej. `iplan-u01`)
 |-------|---------|
 | Nombre del proyecto | mi-api-interna |
 | Carpeta (opcional) | `-ProjectFolderName` si el slug automático no alcanza |
+| MCP Startia | S (default) / N | Igual que Consulting |
 
 ### 4. Confirmación explícita
 
@@ -85,6 +87,7 @@ Mostrar resumen antes de ejecutar PowerShell:
 - Perfil elegido
 - `folderName` calculado (y verificar que no esté en `hub-registry.json`)
 - Ruta absoluta esperada bajo `projects/`
+- Toggles MCP (Startia ON/OFF, backlog, archi)
 - Comando exacto a ejecutar
 
 **No ejecutar el script sin confirmación explícita del usuario.**
@@ -94,12 +97,15 @@ Mostrar resumen antes de ejecutar PowerShell:
 Desde `scripts/` del hub:
 
 ```powershell
-# Consulting / Full
+# Consulting / Full — New-HubProject aplica Startia ON por defecto (sin prompt)
 .\New-HubProject.ps1 `
   -StackProfile Full `
   -ClientDisplayName "IPLAN" -ClientSlug "iplan" `
   -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01" `
   -IncludeBacklogMcp -IncludeArchiMcp
+
+# Apagar Startia (explícito)
+.\New-HubProject.ps1 ... -IncludeStartiaMcp:$false
 
 # GentleAi
 .\New-HubProject.ps1 `
@@ -115,10 +121,11 @@ Tras generar, **detenerse**. El hub no continúa el bootstrap del encargo.
 
 Indicar al usuario:
 
-1. **Abrir** `projects/<nombre>/` como workspace raíz en Cursor (paso crítico para MCP). El script intenta abrir Cursor con `cursor <ruta>` salvo `-SkipOpenCursor`.
-2. Ejecutar **`/onboarding`** en el hijo para recorrido guiado (workspace, MCP, próximos pasos).
-3. Seguir **`docs/GETTING-STARTED.md`** en el hijo — checklist generada automáticamente con pasos por perfil.
-4. Copiar plantilla Word a `docs/templates/` (Consulting/Full).
+1. **Abrir** `projects/<nombre>/` como workspace raíz en Cursor (paso critico para MCP). El script intenta abrir Cursor con `cursor <ruta>` salvo `-SkipOpenCursor`.
+2. Si Startia quedó ON: configurar **`GOVERNOR_PAT`** y **`GOVERNOR_TENANT_ID`** en el entorno del usuario (Windows: variables de usuario; Linux/WSL: `~/.bashrc`), reiniciar Cursor y verificar **Settings → Tools & MCP**.
+3. Ejecutar **`/onboarding`** en el hijo para recorrido guiado (workspace, MCP, próximos pasos).
+4. Seguir **`docs/GETTING-STARTED.md`** en el hijo — checklist generada automáticamente con pasos por perfil.
+5. Copiar plantilla Word a `docs/templates/` (Consulting/Full).
 
 ## Reglas
 

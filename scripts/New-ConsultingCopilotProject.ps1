@@ -53,6 +53,7 @@ param(
   [switch] $IncludeBacklogMcp,
   [switch] $IncludeArchiMcp,
   [bool] $IncludeClaudeCoworkLayer = $false,
+  [bool] $IncludeStartiaMcp = $true,
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipHandoffSummary,
   [switch] $Force,
@@ -140,6 +141,10 @@ if (-not [string]::IsNullOrWhiteSpace($EngramPath)) {
   Write-Warning '-EngramPath está obsoleto y se ignora: Engram es administrado por Gentle AI y no se duplica en el MCP local.'
 }
 
+if (-not $PSBoundParameters.ContainsKey('IncludeStartiaMcp')) {
+  $IncludeStartiaMcp = Read-ConsultingPromptYesNo '¿Incluir MCP Startia + política de skills?' $true
+}
+
 $finalTargetPath = Resolve-ConsultingFinalTargetPath -TargetPath $TargetPath -Force:$Force
 Write-HubPathLocationWarnings -TargetPath $finalTargetPath
 $stagingPath = New-ConsultingProjectStagingPath
@@ -153,11 +158,20 @@ if ($effectiveProfile -eq 'GentleAi') {
     Invoke-GentleAiInstall -CliPath $gentleCliPath -Scope Workspace -TargetPath $TargetPath
   }
   Copy-ProjectOnboardingLayer -SourceRoot $templateRoot -TargetPath $TargetPath
+  if ($IncludeStartiaMcp) {
+    Copy-StartiaMcpPolicy -SourceRoot $templateRoot -TargetPath $TargetPath
+    $mcp = Get-ConsultingMcpServers `
+      -IncludeDrawioMcp $false -IncludeBacklogMcp $false -BacklogMcpCwd '' `
+      -IncludeArchiMcp $false -ArchiMcpArgs @() -IncludeStartiaMcp $IncludeStartiaMcp
+    Write-ConsultingMcpJson -TargetPath $TargetPath -McpServers $mcp
+  }
   Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements ([ordered]@{ '{{PROJECT_NAME}}' = $ProjectName })
-  Write-ProjectProfile -TargetPath $TargetPath -ProjectName $ProjectName -GentleAiScope $gentleDecision.Scope
+  Write-ProjectProfile -TargetPath $TargetPath -ProjectName $ProjectName -GentleAiScope $gentleDecision.Scope -IncludeStartiaMcp $IncludeStartiaMcp
   Test-ConsultingPlaceholders -TargetPath $TargetPath
   if (-not $SkipSkillRegistryRefresh) { Invoke-SkillRegistryRefresh -TargetPath $TargetPath -CliPath $gentleCliPath }
-  $gettingStarted = Write-ProjectGettingStarted -TargetPath $TargetPath -StackProfile GentleAi -Title $ProjectName -GentleAiScope $gentleDecision.Scope
+  $gettingStarted = Write-ProjectGettingStarted `
+    -TargetPath $TargetPath -StackProfile GentleAi -Title $ProjectName -GentleAiScope $gentleDecision.Scope `
+    -IncludeStartiaMcp $IncludeStartiaMcp
 } else {
 if ([string]::IsNullOrWhiteSpace($ClientDisplayName)) { $ClientDisplayName = Read-ConsultingPrompt 'Nombre del cliente' 'Cliente' }
 if ([string]::IsNullOrWhiteSpace($ClientSlug)) {
@@ -217,10 +231,15 @@ Invoke-ConsultingTokenReplacement -TargetPath $TargetPath -Replacements $replace
 
 if (-not $IncludeClaudeCoworkLayer) { Remove-ConsultingClaudeLayer -TargetPath $TargetPath }
 
+if ($IncludeStartiaMcp) {
+  Copy-StartiaMcpPolicy -SourceRoot $templateRoot -TargetPath $TargetPath
+}
+
 $mcp = Get-ConsultingMcpServers `
   -IncludeDrawioMcp $IncludeDrawioMcp `
   -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -BacklogMcpCwd $BacklogMcpCwd `
-  -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs
+  -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs `
+  -IncludeStartiaMcp $IncludeStartiaMcp
 Test-HubMcpConfigurationPaths `
   -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -BacklogMcpCwd $BacklogMcpCwd `
   -IncludeArchiMcp ([bool]$IncludeArchiMcp) -ArchiMcpArgs $ArchiMcpArgs
@@ -245,6 +264,7 @@ $metaFields = [ordered]@{
   includeBacklogMcp = [bool]$IncludeBacklogMcp
   includeArchiMcp = [bool]$IncludeArchiMcp
   includeClaudeCoworkLayer = [bool]$IncludeClaudeCoworkLayer
+  includeStartiaMcp = [bool]$IncludeStartiaMcp
   gentleAiScope = $gentleScopeValue.ToLowerInvariant()
   gentleAiAction = $gentleActionValue.ToLowerInvariant()
   engramMcpSource = if ($requiresGentleAi) { 'gentle-ai-managed' } else { 'none' }
@@ -261,6 +281,7 @@ $gettingStarted = Write-ProjectGettingStarted `
   -TargetPath $TargetPath -StackProfile $effectiveProfile -Title $docTitlePrefix `
   -GentleAiScope $gentleScopeValue -IncludeDrawioMcp $IncludeDrawioMcp `
   -IncludeBacklogMcp ([bool]$IncludeBacklogMcp) -IncludeArchiMcp ([bool]$IncludeArchiMcp) `
+  -IncludeStartiaMcp $IncludeStartiaMcp `
   -CorporateDocxTemplateName $CorporateDocxTemplateName
 }
 
@@ -269,12 +290,14 @@ $gettingStarted = Write-ProjectGettingStarted `
 
   if ($effectiveProfile -eq 'GentleAi') {
     Write-Host "Listo. Proyecto Gentle AI generado en: $TargetPath"
+    if ($IncludeStartiaMcp) { Write-StartiaMcpHandoffHint }
     if (-not $SkipHandoffSummary) {
       Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile GentleAi -GettingStartedPath $gettingStarted -GentleAiScope $gentleDecision.Scope
     }
   } else {
     Write-Host "Listo. Proyecto $effectiveProfile generado en: $TargetPath"
     if ($IncludeClaudeCoworkLayer) { Write-Host 'Capa opcional Claude/Cowork incluida.' }
+    if ($IncludeStartiaMcp) { Write-StartiaMcpHandoffHint }
     if (-not $SkipHandoffSummary) {
       Write-ProjectHandoffSummary -TargetPath $TargetPath -StackProfile $effectiveProfile -GettingStartedPath $gettingStarted -GentleAiScope $gentleScopeValue
     }

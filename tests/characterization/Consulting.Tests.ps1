@@ -71,5 +71,26 @@ Describe 'Perfil Consulting' {
     $meta.engramMcpSource | Should -Be 'none'
     $servers = @(Get-McpServerNamesFromProject -ProjectRoot $target)
     $servers | Should -Not -Contain 'engram'
+    $servers | Should -Contain 'startia'
+    $meta.includeStartiaMcp | Should -Be $true
+    Test-Path (Join-Path $target '.cursor\rules\startia-mcp-skills-policy.mdc') | Should -Be $true
+  }
+
+  It 'omite Startia MCP y rule con IncludeStartiaMcp false' {
+    $target = New-CharacterizationTarget -Name 'consulting-no-startia' -Context $script:ctx
+    Invoke-CharacterizationGenerator -Context $script:ctx -TargetPath $target -Params @{
+      StackProfile = 'Consulting'
+      ClientDisplayName = 'Cliente'
+      ClientSlug = 'cliente'
+      InitiativeDisplayName = 'Assessment'
+      InitiativeId = 'A04'
+      IncludeStartiaMcp = $false
+    }
+
+    $meta = Get-Content (Join-Path $target '.consulting-engagement.json') -Raw | ConvertFrom-Json
+    $meta.includeStartiaMcp | Should -Be $false
+    $servers = @(Get-McpServerNamesFromProject -ProjectRoot $target)
+    $servers | Should -Not -Contain 'startia'
+    Test-Path (Join-Path $target '.cursor\rules\startia-mcp-skills-policy.mdc') | Should -Be $false
   }
 }

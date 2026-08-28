@@ -361,11 +361,27 @@ function Get-BacklogManualInstallHint {
 }
 
 function Get-ConsultingMcpServers {
-  param([bool] $IncludeDrawioMcp, [bool] $IncludeBacklogMcp, [string] $BacklogMcpCwd, [bool] $IncludeArchiMcp, [string[]] $ArchiMcpArgs)
+  param(
+    [bool] $IncludeDrawioMcp,
+    [bool] $IncludeBacklogMcp,
+    [string] $BacklogMcpCwd,
+    [bool] $IncludeArchiMcp,
+    [string[]] $ArchiMcpArgs,
+    [bool] $IncludeStartiaMcp = $false
+  )
   $servers = [ordered]@{}
   if ($IncludeDrawioMcp) { $servers['drawio'] = @{ command = 'npx'; args = @('-y', '@drawio/mcp') } }
   if ($IncludeBacklogMcp) { $servers['backlog'] = @{ command = 'backlog'; args = @('mcp', 'start', '--cwd', $BacklogMcpCwd) } }
   if ($IncludeArchiMcp) { $servers['archi'] = @{ command = 'node'; args = @($ArchiMcpArgs) } }
+  if ($IncludeStartiaMcp) {
+    $servers['startia'] = [ordered]@{
+      url = 'https://api.startia.governor.ingenia.la/api/v1/mcp'
+      headers = [ordered]@{
+        Authorization = 'Bearer ${env:GOVERNOR_PAT}'
+        'X-Tenant-Id' = '${env:GOVERNOR_TENANT_ID}'
+      }
+    }
+  }
   return $servers
 }
 
@@ -387,8 +403,20 @@ function Write-EngagementMetadata {
 }
 
 function Write-ProjectProfile {
-  param([string] $TargetPath, [string] $ProjectName, [string] $GentleAiScope)
-  $meta = [ordered]@{ schemaVersion = 3; stackProfile = 'gentle-ai-only'; projectName = $ProjectName; gentleAiScope = $GentleAiScope.ToLowerInvariant(); generatedAt = (Get-Date).ToString('o') }
+  param(
+    [string] $TargetPath,
+    [string] $ProjectName,
+    [string] $GentleAiScope,
+    [bool] $IncludeStartiaMcp = $false
+  )
+  $meta = [ordered]@{
+    schemaVersion = 3
+    stackProfile = 'gentle-ai-only'
+    projectName = $ProjectName
+    gentleAiScope = $GentleAiScope.ToLowerInvariant()
+    includeStartiaMcp = [bool]$IncludeStartiaMcp
+    generatedAt = (Get-Date).ToString('o')
+  }
   $path = Join-Path $TargetPath '.project-profile.json'
   [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 5) + "`n"), [System.Text.UTF8Encoding]::new($false))
 }
@@ -468,10 +496,12 @@ function Update-ProjectGettingStartedFromMetadata {
     }
     $title = if ($meta.docTitlePrefix) { [string]$meta.docTitlePrefix } else { Split-Path -Leaf $TargetPath }
     $templateName = if ($meta.corporateDocxTemplateName) { [string]$meta.corporateDocxTemplateName } else { 'Plantilla Ingenia - 2025.docx' }
+    $includeStartia = ($meta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$meta.includeStartiaMcp
     return Write-ProjectGettingStarted `
       -TargetPath $TargetPath -StackProfile $stackProfile -Title $title -GentleAiScope $gentleScope `
       -IncludeDrawioMcp ([bool]$meta.includeDrawioMcp) -IncludeBacklogMcp ([bool]$meta.includeBacklogMcp) `
-      -IncludeArchiMcp ([bool]$meta.includeArchiMcp) -CorporateDocxTemplateName $templateName
+      -IncludeArchiMcp ([bool]$meta.includeArchiMcp) -IncludeStartiaMcp $includeStartia `
+      -CorporateDocxTemplateName $templateName
   }
 
   if (Test-Path -LiteralPath $profilePath) {
@@ -480,8 +510,10 @@ function Update-ProjectGettingStartedFromMetadata {
     $gentleScope = if ($meta.gentleAiScope) {
       ([string]$meta.gentleAiScope).Substring(0, 1).ToUpperInvariant() + ([string]$meta.gentleAiScope).Substring(1).ToLowerInvariant()
     } else { 'Global' }
+    $includeStartia = ($meta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$meta.includeStartiaMcp
     return Write-ProjectGettingStarted `
-      -TargetPath $TargetPath -StackProfile GentleAi -Title $projectName -GentleAiScope $gentleScope
+      -TargetPath $TargetPath -StackProfile GentleAi -Title $projectName -GentleAiScope $gentleScope `
+      -IncludeStartiaMcp $includeStartia
   }
 
   throw "No se encontró metadata de proyecto en: $TargetPath"
@@ -491,6 +523,7 @@ function Write-ProjectGettingStarted {
   param(
     [string] $TargetPath, [string] $StackProfile, [string] $Title, [string] $GentleAiScope = 'None',
     [bool] $IncludeDrawioMcp = $false, [bool] $IncludeBacklogMcp = $false, [bool] $IncludeArchiMcp = $false,
+    [bool] $IncludeStartiaMcp = $false,
     [string] $CorporateDocxTemplateName = 'Plantilla Ingenia - 2025.docx'
   )
   $docsDir = Join-Path $TargetPath 'docs'
@@ -506,6 +539,7 @@ function Write-ProjectGettingStarted {
   if ($IncludeDrawioMcp) { $expectedMcp += 'drawio' }
   if ($IncludeBacklogMcp) { $expectedMcp += 'backlog' }
   if ($IncludeArchiMcp) { $expectedMcp += 'archi' }
+  if ($IncludeStartiaMcp) { $expectedMcp += 'startia' }
   $expectedMcpLabel = if ($expectedMcp.Count) { $expectedMcp -join ', ' } else { 'ninguno' }
 
   $engramNote = if ($requiresGentleAi) {
@@ -515,12 +549,20 @@ function Write-ProjectGettingStarted {
 "@
   } else { '' }
 
+  $startiaEnvNote = if ($IncludeStartiaMcp) {
+@"
+
+> **Startia:** antes de verificar MCP en verde, configura en el entorno del **usuario** (nunca en el repo) ``GOVERNOR_PAT`` (token Startia) y ``GOVERNOR_TENANT_ID``. Windows: variables de usuario. Linux/WSL: ``~/.bashrc``. Reinicia Cursor despues.
+"@
+  } else { '' }
+
   $prereqRows = @()
   if ($IncludeDrawioMcp) { $prereqRows += '| Node.js + npx | MCP Draw.io |' }
   if ($requiresGentleAi) { $prereqRows += '| `engram` CLI | Memoria persistente (Full / GentleAi) |' }
   if ($IncludeBacklogMcp) { $prereqRows += '| `backlog` CLI | MCP Backlog (si esta configurado) |' }
   if ($isConsulting) { $prereqRows += '| Pandoc | Regenerar .docx de entregables |' }
   if ($IncludeArchiMcp) { $prereqRows += '| Archi + archi-server | MCP Archi (si esta configurado) |' }
+  if ($IncludeStartiaMcp) { $prereqRows += '| `GOVERNOR_PAT` + `GOVERNOR_TENANT_ID` | Auth MCP Startia (skills Ingenia) |' }
   $prereqTable = if ($prereqRows.Count) {
     "| Herramienta | Para que |`n|-------------|----------|`n$($prereqRows -join "`n")"
   } else {
@@ -619,6 +661,7 @@ $consultingWorkflow
 
 Los MCP del proyecto (**$expectedMcpLabel**) se leen desde ``.cursor/mcp.json`` de **esta carpeta**. Si seguis con el **hub generador padre** como workspace raiz, Engram y el resto **no** estaran disponibles en el agente aunque el CLI funcione en terminal.
 $engramNote
+$startiaEnvNote
 1. **File -> Open Folder** -> selecciona la raiz de **este** repositorio (la carpeta que contiene este archivo).
 2. **Developer: Reload Window** si los MCP no aparecen al abrir.
 3. **Cursor Settings -> MCP** - verifica que los servidores esperados (**$expectedMcpLabel**) figuren en verde.
@@ -654,6 +697,24 @@ function Copy-ProjectOnboardingLayer {
     if (-not (Test-Path -LiteralPath $skillDestDir)) { New-Item -ItemType Directory -Path $skillDestDir -Force | Out-Null }
     Get-ChildItem -LiteralPath $skillSrc -Force | Copy-Item -Destination $skillDestDir -Recurse -Force
   }
+}
+
+function Copy-StartiaMcpPolicy {
+  param([string] $SourceRoot, [string] $TargetPath)
+  $ruleSrc = Join-HubPath $SourceRoot 'overlays' 'optional' 'startia' '.cursor' 'rules' 'startia-mcp-skills-policy.mdc'
+  if (-not (Test-Path -LiteralPath $ruleSrc)) {
+    throw "IncludeStartiaMcp requiere la rule fuente inexistente: $ruleSrc"
+  }
+  $ruleDestDir = Join-HubPath $TargetPath '.cursor' 'rules'
+  if (-not (Test-Path -LiteralPath $ruleDestDir)) { New-Item -ItemType Directory -Path $ruleDestDir -Force | Out-Null }
+  Copy-Item -LiteralPath $ruleSrc -Destination $ruleDestDir -Force
+}
+
+function Write-StartiaMcpHandoffHint {
+  Write-Host ''
+  Write-Host 'MCP Startia: configura GOVERNOR_PAT y GOVERNOR_TENANT_ID en el entorno del usuario' -ForegroundColor Yellow
+  Write-Host '  Windows: Variables de entorno de usuario | Linux/WSL: ~/.bashrc (o equivalente)'
+  Write-Host '  Luego reinicia Cursor y verifica Settings -> Tools & MCP (servidor startia en verde).'
 }
 
 function Invoke-OpenCursorWorkspace {
@@ -1268,6 +1329,14 @@ function Test-HubConsultingBaseStructureChecks {
   if ($EngagementMeta.includeDrawioMcp -and 'drawio' -notin $servers) { $issues += 'missing-mcp-drawio' }
   if ($EngagementMeta.includeBacklogMcp -and 'backlog' -notin $servers) { $issues += 'missing-mcp-backlog' }
   if ($EngagementMeta.includeArchiMcp -and 'archi' -notin $servers) { $issues += 'missing-mcp-archi' }
+  $includeStartia = ($EngagementMeta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$EngagementMeta.includeStartiaMcp
+  if ($includeStartia) {
+    if ('startia' -notin $servers) { $issues += 'missing-mcp-startia' }
+    $startiaRule = Test-HubDiagnosticPathExists `
+      -Path (Join-HubPath $Root '.cursor' 'rules' 'startia-mcp-skills-policy.mdc') `
+      -Label 'startia-mcp-policy-rule'
+    if ($startiaRule) { $issues += $startiaRule }
+  }
   if ('engram' -in $servers) { $issues += 'workspace-engram-mcp' }
 
   return $issues
@@ -1336,6 +1405,20 @@ function Test-HubGentleAiStructureChecks {
   if (Test-Path -LiteralPath $mcpPath) {
     $servers = Get-HubMcpServerNames -McpJsonPath $mcpPath
     if ('engram' -in $servers) { $issues += 'workspace-engram-mcp' }
+  }
+
+  $includeStartia = ($ProjectMeta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$ProjectMeta.includeStartiaMcp
+  if ($includeStartia) {
+    if (-not (Test-Path -LiteralPath $mcpPath)) {
+      $issues += 'missing-mcp-json'
+    } else {
+      $servers = Get-HubMcpServerNames -McpJsonPath $mcpPath
+      if ('startia' -notin $servers) { $issues += 'missing-mcp-startia' }
+    }
+    $startiaRule = Test-HubDiagnosticPathExists `
+      -Path (Join-HubPath $Root '.cursor' 'rules' 'startia-mcp-skills-policy.mdc') `
+      -Label 'startia-mcp-policy-rule'
+    if ($startiaRule) { $issues += $startiaRule }
   }
 
   return $issues
@@ -1693,6 +1776,7 @@ Export-ModuleMember -Function @(
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',
+  'Copy-StartiaMcpPolicy', 'Write-StartiaMcpHandoffHint',
   'Invoke-OpenCursorWorkspace', 'Write-ProjectHandoffSummary',
   'Resolve-HubRootPath', 'Test-HubPathIsChildOf', 'Test-HubRootLayout', 'Get-HubMoveBackupPath',
   'Test-HubMovePreconditions', 'Replace-HubPathPrefixInText', 'Replace-HubPathLiteralInText', 'Update-HubRegistryPaths',

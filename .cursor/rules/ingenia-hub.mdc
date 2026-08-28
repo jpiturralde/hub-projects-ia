@@ -33,6 +33,14 @@ Los hijos se generan en `projects/` (gitignored en el padre). Cada hijo recibe s
 
 Mejoras al molde van en `skeleton/`, `skeleton-minimal/` y `overlays/` **en este repo**. No hay sync automático a hijos ya generados.
 
+## Startia MCP vs forks del skeleton
+
+- Catálogo Ingenia approved → **Startia MCP** (`list_skills` / `get_skill`).
+- Si hace falta en disco → `.cursor/skills/` del **proyecto hijo**, nunca `~/.cursor/skills`.
+- Estos skills del skeleton son **wrappers** (capa hub sobre contenido Startia): `architect-copilot`, `transcription-to-actions`, `consulting-code-technical-analysis` (MCP `code-technical-analysis`), `consulting-draft-client-deliverable` (MCP `draft-ingenia-gdocs-deliverable`).
+- Ante duda de contenido genérico, contrastar con Startia. Re-sync manual: bajar approved → fusionar capa hub → PR al hub (ver `HUB-WORKFLOW.md`).
+- No editar un fork del skeleton “para un cliente” dentro de un hijo sin decidir si el cambio vuelve al hub o a Startia.
+
 ## Referencias
 
 - [`README.md`](../../README.md) — visión del hub

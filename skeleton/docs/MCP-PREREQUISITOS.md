@@ -7,6 +7,7 @@ Este documento describe **qué instalar** y **cómo verificarlo** para usar los 
 | **drawio** | Abrir/editar diagramas Draw.io desde el agente (`npx @drawio/mcp`). | Si activás Draw.io MCP (por defecto en el script). |
 | **backlog** | Tareas y backlog Markdown vía [Backlog.md](https://github.com/MrLesk/Backlog.md). | Solo si elegís incluir MCP backlog. |
 | **archi** | Modelo ArchiMate en vivo (proceso `node` + ruta a `dist/index.js`). | Solo si elegís MCP Archi. |
+| **startia** | Catálogo de skills Ingenia (approved) vía remote MCP. | Por defecto ON al generar (`-IncludeStartiaMcp`); apagar con `$false`. |
 
 ### Prerrequisitos según el cliente que uses
 
@@ -210,9 +211,10 @@ node /ruta/absoluta/archi-mcp/dist/index.js --help
 ### Con `.cursor/mcp.json` (p. ej. Cursor)
 
 1. Abrí el **workspace** en la raíz del repo generado (importante para `backlog` y `--cwd`).
-2. En ajustes del IDE → **MCP**, comprobá que `drawio`, `backlog` y/o `archi` figuren sin error.
+2. En ajustes del IDE → **MCP**, comprobá que `drawio`, `backlog`, `archi` y/o `startia` figuren sin error.
 3. Si falla **backlog**: revisá `command` y `args` en `.cursor/mcp.json` (ruta al binario y `--cwd` absoluto al repo).
 4. Si falla **drawio**: revisá `node`/`npx` en PATH o usá ruta absoluta a `npx`.
+5. Si falla **startia**: verificá `GOVERNOR_PAT` / `GOVERNOR_TENANT_ID` en el entorno del usuario y reiniciá Cursor (§ 5).
 
 ### Con Claude Desktop / Cowork
 
@@ -220,7 +222,48 @@ Registrá los conectores y comprobá logs según [MCP-CLAUDE-DESKTOP.md](MCP-CLA
 
 ---
 
-## 5. Otros (no son MCP, pero la documentación del template los menciona)
+## 5. MCP Startia (catálogo de skills Ingenia)
+
+Remote MCP del hub Governor. El generador (default ON) escribe la entrada en `.cursor/mcp.json` y la rule `startia-mcp-skills-policy.mdc`.
+
+### Configuración
+
+```json
+"startia": {
+  "url": "https://api.startia.governor.ingenia.la/api/v1/mcp",
+  "headers": {
+    "Authorization": "Bearer ${env:GOVERNOR_PAT}",
+    "X-Tenant-Id": "${env:GOVERNOR_TENANT_ID}"
+  }
+}
+```
+
+- `GOVERNOR_PAT` — token de acceso personal Startia (variable de **usuario**, no en el repo).
+- `GOVERNOR_TENANT_ID` — ID del tenant.
+- Windows: variables de entorno de usuario. Linux/WSL: `~/.bashrc` (o equivalente). Reiniciá Cursor y verificá **Settings → Tools & MCP**.
+
+### Wrappers del skeleton ↔ skill MCP
+
+| Skill en `.cursor/skills/` (wrapper hub) | Nombre canónico en Startia |
+|------------------------------------------|----------------------------|
+| `architect-copilot` | `architect-copilot` |
+| `transcription-to-actions` | `transcription-to-actions` |
+| `consulting-code-technical-analysis` | `code-technical-analysis` |
+| `consulting-draft-client-deliverable` | `draft-ingenia-gdocs-deliverable` |
+
+Los wrappers agregan wiring del template (rutas, placeholders, reglas). Startia es la fuente del **contenido genérico** approved. Con `-IncludeStartiaMcp:$false` no hay server `startia` en `mcp.json`: los wrappers locales siguen válidos; no asumas tools MCP Startia.
+
+### Cuándo materializar un ZIP en el hijo
+
+- **Usar el wrapper** del skeleton para el flujo del encargo (ya adaptado).
+- **Materializar con `get_skill`** en `.cursor/skills/` de **este proyecto** cuando necesités una skill approved que no está en el skeleton, o para contrastar/actualizar contenido genérico.
+- **Nunca** instalar esos skills en `~/.cursor/skills` (user global).
+
+Ver también la rule `startia-skill-wrappers.mdc`.
+
+---
+
+## 6. Otros (no son MCP, pero la documentación del template los menciona)
 
 | Herramienta | Para qué | Enlace |
 |-------------|----------|--------|
@@ -233,10 +276,10 @@ En macOS suele citarse `brew install pandoc`. En Windows: instalador desde la p�
 
 ## Resumen rápido
 
-| SO | Draw.io MCP | Backlog MCP | Archi MCP |
-|----|-------------|-------------|-----------|
-| **Windows** | Node LTS desde nodejs.org | `npm i -g backlog.md@latest --include=optional` | Archi + jArchi + Node + ruta `index.js` |
-| **macOS** | Node o Homebrew `brew install node` | `brew install backlog-md` o `npm i -g backlog.md@latest --include=optional` | Igual |
-| **Linux / WSL** | Node desde distro o nodejs.org | `npm i -g backlog.md@latest --include=optional` (nativo WSL; no `/mnt/c`) | Igual; atención a si MCP corre en Windows vs WSL |
+| SO | Draw.io MCP | Backlog MCP | Archi MCP | Startia MCP |
+|----|-------------|-------------|-----------|-------------|
+| **Windows** | Node LTS desde nodejs.org | `npm i -g backlog.md@latest --include=optional` | Archi + jArchi + Node + ruta `index.js` | `GOVERNOR_PAT` + `GOVERNOR_TENANT_ID` (vars de usuario) |
+| **macOS** | Node o Homebrew `brew install node` | `brew install backlog-md` o `npm i -g backlog.md@latest --include=optional` | Igual | Igual (shell profile / launchd env) |
+| **Linux / WSL** | Node desde distro o nodejs.org | `npm i -g backlog.md@latest --include=optional` (nativo WSL; no `/mnt/c`) | Igual; atención a si MCP corre en Windows vs WSL | `~/.bashrc` + reinicio Cursor |
 
 *Última actualización: alineado al template Ingenia (`ingenia-template-ia`) y a `mcp.json.example` del skeleton.*

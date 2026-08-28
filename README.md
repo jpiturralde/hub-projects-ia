@@ -69,7 +69,7 @@ pwsh -NoProfile -File ./New-HubProject.ps1 -StackProfile GentleAi -ProjectName "
 - `PROJECT-CONTEXT.md`: entrada de contexto.
 - `.cursorignore`: excluye fuentes pesadas de indexado automático.
 - `context-budget.mdc` y `/start-task`: un objetivo/dominio y hasta dos archivos iniciales.
-- `.cursor/mcp.json`: sólo MCP del proyecto (Draw.io, Backlog, Archi); nunca Engram.
+- `.cursor/mcp.json`: MCP del proyecto (Draw.io, Backlog, Archi y **Startia** por defecto); nunca Engram.
 - `.cdd/changes/`: artefactos CDD completos y versionables.
 - Engram: decisiones, hallazgos, estado, resúmenes y punteros.
 

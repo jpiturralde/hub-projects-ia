@@ -1,12 +1,15 @@
 # Prerrequisitos MCP — template Ingenia
 
-Este documento describe **qué instalar** y **cómo verificarlo** para usar los MCP que el script [`scripts/New-IngeniaCursorProject.ps1`](scripts/New-IngeniaCursorProject.ps1) puede volcar en `.cursor/mcp.json` (según toggles):
+> **Canónico para proyectos hijos:** [`skeleton/docs/MCP-PREREQUISITOS.md`](skeleton/docs/MCP-PREREQUISITOS.md) (incluye **Startia MCP**, wrappers y `GOVERNOR_*`). Este archivo del hub resume prerrequisitos al mantener el template; mantené Startia alineado con el skeleton.
+
+Este documento describe **qué instalar** y **cómo verificarlo** para usar los MCP que el generador (`New-HubProject.ps1` / `New-ConsultingCopilotProject.ps1`) puede volcar en `.cursor/mcp.json` (según toggles):
 
 | MCP en `mcp.json` | Rol | Obligatorio |
 |-------------------|-----|-------------|
 | **drawio** | Abrir/editar diagramas Draw.io desde el agente (`npx @drawio/mcp`). | Si activás Draw.io MCP (por defecto en el script). |
 | **backlog** | Tareas y backlog Markdown vía [Backlog.md](https://github.com/MrLesk/Backlog.md). | Solo si elegís incluir MCP backlog. |
 | **archi** | Modelo ArchiMate en vivo (proceso `node` + ruta a `dist/index.js`). | Solo si elegís MCP Archi. |
+| **startia** | Catálogo de skills Ingenia (remote MCP). | Default ON (`-IncludeStartiaMcp`); apagar con `$false`. Requiere `GOVERNOR_PAT` + `GOVERNOR_TENANT_ID`. |
 
 ### Prerrequisitos según el cliente que uses
 
@@ -26,6 +29,8 @@ Este documento describe **qué instalar** y **cómo verificarlo** para usar los 
 | **Entrada compilada** del servidor MCP Archi | `archi` → `args[0]` (ruta a `index.js`) | `C:\ABSOLUTE\PATH\TO\archi-mcp\dist\index.js` | Origen/build según equipo interno — ver § 3. |
 | **Comando `backlog`** (opcional) | `backlog` → `command` | `backlog` | Si el CLI no está en el `PATH` del proceso que ejecuta los MCP, poner la **ruta absoluta** al ejecutable (PowerShell: `Get-Command backlog`). |
 | **`npx` o `node`** (opcional) | `drawio` → `command` | `npx` | Si `npx` no se resuelve desde ese mismo entorno, usar ruta absoluta al binario (p. ej. con nvm/Homebrew/npm prefix). § 1 en macOS. |
+| **`GOVERNOR_PAT`** (Startia) | `startia` → `headers.Authorization` | `Bearer ${env:GOVERNOR_PAT}` | Variable de **usuario** (nunca en el repo). Token Startia. |
+| **`GOVERNOR_TENANT_ID`** (Startia) | `startia` → `headers.X-Tenant-Id` | `${env:GOVERNOR_TENANT_ID}` | Variable de **usuario**. ID del tenant. |
 
 ---
 
