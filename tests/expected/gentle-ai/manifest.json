@@ -3,8 +3,10 @@
   "expectedProfile": "GentleAi",
   "files": [
     ".cursor/commands/start-task.md",
+    ".cursor/mcp.json",
     ".cursor/rules/context-budget.mdc",
     ".cursor/rules/onboarding.mdc",
+    ".cursor/rules/startia-mcp-skills-policy.mdc",
     ".cursor/skills/onboarding/SKILL.md",
     ".cursorignore",
     ".gitignore",
@@ -14,12 +16,15 @@
     "README.md",
     "scripts/Test-ProjectEnvironment.ps1"
   ],
-  "mcpServers": [],
+  "mcpServers": [
+    "startia"
+  ],
   "metadata": {
     "schemaVersion": 4,
     "stackProfile": "gentle-ai-only",
     "projectName": "equiv-app",
     "gentleAiScope": "global",
+    "includeStartiaMcp": true,
     "requires": {
       "version": 1,
       "tools": [

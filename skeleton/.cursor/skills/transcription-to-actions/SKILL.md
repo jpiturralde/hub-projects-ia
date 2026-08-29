@@ -1,9 +1,13 @@
 ---
 name: transcription-to-actions
 description: Extrae decisiones, tareas, riesgos, preguntas abiertas y seguimientos de stakeholders desde transcripciones de reuniones. Usar al resumir transcripts, convertir reuniones en ítems de backlog o derivar acciones de proyecto desde notas crudas.
+source: startia
+canonical_mcp: transcription-to-actions
 ---
 
 # Transcription To Actions
+
+> Capa hub sobre Startia (`transcription-to-actions`). No copiar a `~/.cursor/skills`. Re-sync manual desde Startia cuando cambie la versión approved.
 
 Usar este skill para transformar material crudo de reuniones en salidas operativas del proyecto.
 

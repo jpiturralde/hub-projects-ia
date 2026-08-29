@@ -1,0 +1,29 @@
+---
+description: Wrappers del skeleton vs catálogo Startia — fuente canónica y dónde materializar
+alwaysApply: false
+---
+
+# Startia — wrappers del template
+
+## Fuente canónica
+
+- Contenido genérico approved de Ingenia → MCP **startia** (`list_skills` / `get_skill`), **si** el server `startia` está en `.cursor/mcp.json` y en verde.
+- Si el proyecto se generó con `-IncludeStartiaMcp:$false`, **no** hay MCP Startia cableado: usá los wrappers locales; no asumas que `list_skills`/`get_skill` están disponibles.
+- Si materializás un ZIP → `.cursor/skills/` de **este proyecto**, no `~/.cursor/skills`.
+
+## Wrappers del skeleton (no borrar)
+
+Estos skills son **capa hub** (rutas del encargo, placeholders, reglas locales). Funcionan **sin** MCP Startia. Ante duda de contenido genérico *y* con Startia activo, contrastá con el catálogo:
+
+| Skill en el proyecto | Nombre canónico MCP |
+|----------------------|---------------------|
+| `architect-copilot` | `architect-copilot` |
+| `transcription-to-actions` | `transcription-to-actions` |
+| `consulting-code-technical-analysis` | `code-technical-analysis` |
+| `consulting-draft-client-deliverable` | `draft-ingenia-gdocs-deliverable` |
+
+## Qué no hacer
+
+- No reinstalar estos skills en el user global.
+- No crear un segundo skill con el nombre exacto del catálogo MCP si ya existe el wrapper `consulting-*`.
+- No editar un fork “solo para este cliente” sin decidir si el cambio vuelve al **hub** o a **Startia**.

@@ -1,9 +1,13 @@
 ---
 name: architect-copilot
 description: Analiza el estado del encargo de consultoría — backlog, riesgos, brechas, stakeholders y próximas acciones. Usar cuando el usuario pregunte qué hacer, pida revisar el proyecto, priorizar trabajo, identificar bloqueos o actuar como copilot de arquitectura/proyecto.
+source: startia
+canonical_mcp: architect-copilot
 ---
 
 # Architect Copilot
+
+> Capa hub sobre Startia (`architect-copilot`). No copiar a `~/.cursor/skills`. Re-sync manual desde Startia cuando cambie la versión approved.
 
 Usar este skill para ayudar a ejecutar de forma ordenada encargos de consultoría con mucha documentación.
 

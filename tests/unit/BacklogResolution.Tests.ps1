@@ -300,4 +300,18 @@ Describe 'Get-ConsultingMcpServers sin Backlog' {
     $servers['backlog'].command | Should -Be 'backlog'
     $servers['backlog'].args[-1] | Should -Be '/tmp/proj'
   }
+
+  It 'incluye startia con headers env cuando IncludeStartiaMcp es true' {
+    $servers = Get-ConsultingMcpServers -IncludeDrawioMcp $false -IncludeBacklogMcp $false -BacklogMcpCwd '' -IncludeArchiMcp $false -ArchiMcpArgs @() -IncludeStartiaMcp $true
+    $servers.Contains('startia') | Should -Be $true
+    $servers['startia'].url | Should -Be 'https://api.startia.governor.ingenia.la/api/v1/mcp'
+    $servers['startia'].headers.Authorization | Should -Be 'Bearer ${env:GOVERNOR_PAT}'
+    $servers['startia'].headers.'X-Tenant-Id' | Should -Be '${env:GOVERNOR_TENANT_ID}'
+  }
+
+  It 'omite startia cuando IncludeStartiaMcp es false' {
+    $servers = Get-ConsultingMcpServers -IncludeDrawioMcp $true -IncludeBacklogMcp $false -BacklogMcpCwd '' -IncludeArchiMcp $false -ArchiMcpArgs @() -IncludeStartiaMcp $false
+    $servers.Contains('startia') | Should -Be $false
+    $servers.Contains('drawio') | Should -Be $true
+  }
 }

@@ -1,9 +1,13 @@
 ---
 name: consulting-draft-client-deliverable
 description: "Redacta entregables orientados al cliente ({{CLIENT_DISPLAY_NAME}} — {{INITIATIVE_DISPLAY_NAME}}) desde Markdown; DOCX/Google Docs. Reportes, anexos, arquitectura."
+source: startia
+canonical_mcp: draft-ingenia-gdocs-deliverable
 ---
 
 # Draft Client Deliverable — {{DOC_TITLE_PREFIX}}
+
+> Capa hub / alias de Startia `draft-ingenia-gdocs-deliverable` (placeholders de cliente/iniciativa). No copiar a `~/.cursor/skills`. No crear un segundo skill con el nombre exacto del catálogo. Re-sync manual desde Startia cuando cambie la versión approved.
 
 Usar este skill al preparar material que va a salir del repositorio y compartirse con {{CLIENT_DISPLAY_NAME}} u otros stakeholders del cliente.
 

@@ -90,7 +90,7 @@ Describe 'Integridad del template' {
       -ClientDisplayName 'Cliente' -ClientSlug 'cliente' `
       -InitiativeDisplayName 'Assessment' -InitiativeId 'A01' `
       -IncludeDrawioMcp:$false -IncludeBacklogMcp:$false -IncludeArchiMcp:$false `
-      -IncludeClaudeCoworkLayer:$false -SkipHandoffSummary
+      -IncludeClaudeCoworkLayer:$false -IncludeStartiaMcp:$true -SkipHandoffSummary -SkipSkillRegistryRefresh
 
     Test-Path (Join-Path $target 'PROJECT-CONTEXT.md') | Should -BeTrue
     Test-Path (Join-Path $target '.cursor\rules\context-budget.mdc') | Should -BeTrue

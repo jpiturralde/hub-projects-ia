@@ -17,6 +17,8 @@
     ".cursor/rules/deliverable-draft-workflow.mdc",
     ".cursor/rules/diagram-notes-lifecycle.mdc",
     ".cursor/rules/onboarding.mdc",
+    ".cursor/rules/startia-mcp-skills-policy.mdc",
+    ".cursor/rules/startia-skill-wrappers.mdc",
     ".cursor/rules/transcripts-immutable.mdc",
     ".cursor/skills/architect-copilot/SKILL.md",
     ".cursor/skills/bootstrap-consulting-engagement/SKILL.md",
@@ -54,7 +56,9 @@
     "SPEC.md",
     "transcripts/README.md"
   ],
-  "mcpServers": [],
+  "mcpServers": [
+    "startia"
+  ],
   "metadata": {
     "schemaVersion": 4,
     "stackProfile": "consulting-only",
@@ -64,6 +68,7 @@
     "includeDrawioMcp": false,
     "includeBacklogMcp": false,
     "includeArchiMcp": false,
+    "includeStartiaMcp": true,
     "requires": {
       "version": 1,
       "tools": [

@@ -11,6 +11,13 @@
     "archi": {
       "command": "node",
       "args": ["C:\\ABSOLUTE\\PATH\\TO\\archi-mcp\\dist\\index.js"]
+    },
+    "startia": {
+      "url": "https://api.startia.governor.ingenia.la/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:GOVERNOR_PAT}",
+        "X-Tenant-Id": "${env:GOVERNOR_TENANT_ID}"
+      }
     }
   }
 }

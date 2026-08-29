@@ -82,6 +82,9 @@ param(
   [Parameter(Mandatory = $false)]
   [bool] $IncludeClaudeCoworkLayer = $false,
 
+  [Parameter(Mandatory = $false)]
+  [bool] $IncludeStartiaMcp = $true,
+
   [switch] $SkipSkillRegistryRefresh,
   [switch] $SkipGitInit,
   [switch] $SkipOpenCursor,
@@ -212,6 +215,7 @@ $genParams = @{
   ConsultancyName          = $ConsultancyName
   CorporateDocxTemplateName = $CorporateDocxTemplateName
   IncludeDrawioMcp         = $IncludeDrawioMcp
+  IncludeStartiaMcp        = $IncludeStartiaMcp
   Force                    = $Force
 }
 

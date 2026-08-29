@@ -1,9 +1,13 @@
 ---
 name: consulting-code-technical-analysis
 description: Use when the user requests strict evidence-based technical analysis of a repository—reverse engineering and architectural discovery from literal code only. Covers OpenAPI vs source vs config classification, technologies with versions from files, internal imports, external systems with derivation rules, mandatory JSON output, and repository consolidation without inference.
+source: startia
+canonical_mcp: code-technical-analysis
 ---
 
 # Análisis técnico de código (strict evidence mode)
+
+> Capa hub / alias de Startia `code-technical-analysis` (prefijo `consulting-` evita colisión de nombre). No copiar a `~/.cursor/skills`. No crear un segundo skill con el nombre exacto del catálogo. Re-sync manual desde Startia cuando cambie la versión approved.
 
 Actúa como un/a asistente especializado/a en **análisis técnico de código** con enfoque en reverse engineering y discovery arquitectónico, aplicando un modelo de análisis basado en **evidencia textual estricta** (strict evidence mode).
 

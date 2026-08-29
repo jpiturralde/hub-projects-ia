@@ -35,6 +35,8 @@
     ".cursor/rules/diagram-notes-lifecycle.mdc",
     ".cursor/rules/gentle-ai-consulting.mdc",
     ".cursor/rules/onboarding.mdc",
+    ".cursor/rules/startia-mcp-skills-policy.mdc",
+    ".cursor/rules/startia-skill-wrappers.mdc",
     ".cursor/rules/transcripts-immutable.mdc",
     ".cursor/skills/_shared/cdd-phase-common.md",
     ".cursor/skills/_shared/engram-convention.md",
@@ -86,7 +88,9 @@
     "SPEC.md",
     "transcripts/README.md"
   ],
-  "mcpServers": [],
+  "mcpServers": [
+    "startia"
+  ],
   "metadata": {
     "schemaVersion": 4,
     "stackProfile": "consulting-ai",
@@ -96,6 +100,7 @@
     "includeDrawioMcp": false,
     "includeBacklogMcp": false,
     "includeArchiMcp": false,
+    "includeStartiaMcp": true,
     "requires": {
       "version": 1,
       "tools": [

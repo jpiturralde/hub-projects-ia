@@ -17,6 +17,7 @@ Motor único: **PowerShell 7** (`pwsh`). Los mismos entrypoints sirven en Window
 | `templates/Test-ProjectEnvironment.ps1` | Plantilla emitida al hijo como `scripts/Test-ProjectEnvironment.ps1` |
 | `Test-GentleAiProject.ps1` | Diagnóstico read-only Gentle AI / Engram |
 | `Refresh-ProjectGettingStarted.ps1` | Regenera GETTING-STARTED + upsert `requires` + re-emite doctor (ruta o registry v2) |
+| `Propagate-HubTemplateToChildren.ps1` | Propagación **opt-in** de plantilla allowlist a hijos (worktree hub-side; sin auto-sync) |
 | `Move-HubProjectsIa.ps1` | Relocalización **Windows-only** (no Linux/WSL; no Windows↔WSL) |
 
 ## Windows
@@ -49,8 +50,24 @@ cd /home/usuario/work/hub-projects-ia
 ./scripts/hub env projects/iplan-u01
 ./scripts/hub refresh projects/iplan-u01
 ./scripts/hub refresh --all
+./scripts/hub propagate --all --dry-run
+./scripts/hub propagate iplan-u01 --branch hub/propagate-demo
+./scripts/hub propagate --profile ConsultingAI --include-mcp-merge
 ./scripts/hub --help
 ```
+
+`hub propagate` selecciona por **registry** (FolderName / `--all` / `--profile`), no por ruta como `refresh`. Tabla argv → script:
+
+| argv `hub` | param PowerShell |
+|------------|------------------|
+| `propagate --all` | `-All` |
+| `propagate <FolderName>` | `-FolderName` |
+| `--profile X` / `-StackProfile` | `-StackProfile` |
+| `--dry-run` | `-DryRun` |
+| `--include-mcp-merge` | `-IncludeMcpMerge` |
+| `--branch name` | `-BranchName` |
+
+DryRun = plan only (sin worktree ni Sync). Apply escribe solo en worktree hub-side bajo `.hub-propagate-worktrees/`.
 
 Invocación directa equivalente:
 
@@ -68,6 +85,10 @@ pwsh -NoProfile -File ./Test-HubProject.ps1 \
   -ExpectedProfile ConsultingAI
 
 pwsh -NoProfile -File ./Refresh-ProjectGettingStarted.ps1 -AllFromRegistry
+
+pwsh -NoProfile -File ./Propagate-HubTemplateToChildren.ps1 -All -DryRun
+pwsh -NoProfile -File ./Propagate-HubTemplateToChildren.ps1 `
+  -FolderName iplan-u01 -BranchName hub/propagate-demo
 ```
 
 ## Notas

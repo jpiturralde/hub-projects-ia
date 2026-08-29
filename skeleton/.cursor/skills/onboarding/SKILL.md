@@ -44,8 +44,14 @@ Lee `requires.tools[]` (ids con `level` required|optional). Si `requires` no exi
 | `includeDrawioMcp=true` | node, npm, npx obligatorios |
 | `includeArchiMcp=true` | archi (+ node/npm) obligatorios |
 | `includeBacklogMcp=true` | backlog obligatorio |
+| `includeStartiaMcp=true` (o `startia` en `.cursor/mcp.json`) | `GOVERNOR_PAT` + `GOVERNOR_TENANT_ID` en entorno de usuario; server en verde |
 | Consulting* | pandoc opcional; backlog opcional si el toggle es false |
 | `gentleAiScope` global\|workspace | CLI de asistencia obligatorio |
+
+- Listar servidores locales esperados según `.cursor/mcp.json`: típicamente `drawio`, opcionalmente `backlog`/`archi`, y **`startia`** si figura en el JSON (default al generar).
+- Si **`startia`** está presente: confirmar `GOVERNOR_PAT` y `GOVERNOR_TENANT_ID`, y que el server está en verde tras reiniciar Cursor. Detalle: `docs/GETTING-STARTED.md` y `docs/MCP-PREREQUISITOS.md` § Startia.
+- Para ConsultingAI/GentleAi, verificar Engram por separado como integración administrada por Gentle AI. No agregarlo al MCP local.
+- Si **archi** o **backlog** tienen rutas placeholder, indicar editar `.cursor/mcp.json` (ver `docs/MCP-PREREQUISITOS.md`).
 
 Para cada herramienta **obligatoria**, guia una verificacion **sin PowerShell**:
 
@@ -55,7 +61,7 @@ Para cada herramienta **obligatoria**, guia una verificacion **sin PowerShell**:
 
 Opcionales: informar si faltan; no bloquear el onboarding.
 
-**MCP local** (solo drawio / backlog / archi — nunca entradas de memoria en el MCP del hijo):
+**MCP local** (drawio / backlog / archi / startia — nunca entradas de memoria en el MCP del hijo):
 
 - **Aun no materializado** (no hay `.cursor/mcp.json`): falla la verificacion **solo** si el perfil requiere servidores locales; si no, es informativo.
 - **Con problemas / roto** (JSON invalido, rutas malas, o entradas prohibidas): **siempre** es un fallo a corregir.

@@ -109,6 +109,33 @@ Describe 'Launcher Bash scripts/hub' {
       $out | Should -Match '-TargetPath'
       $out | Should -Match 'iplan-prev-2142'
     }
+
+    It 'propagate --all --dry-run traduce a Propagate-HubTemplateToChildren.ps1' {
+      $out = & bash $script:hubLauncher propagate --all --dry-run 2>&1 | Out-String
+      $LASTEXITCODE | Should -Be 0
+      $out | Should -Match 'Propagate-HubTemplateToChildren\.ps1'
+      $out | Should -Match '-All'
+      $out | Should -Match '-DryRun'
+    }
+
+    It 'propagate FolderName --branch mapea -FolderName y -BranchName' {
+      $out = & bash $script:hubLauncher propagate iplan-prev-2142 --branch hub/propagate-demo 2>&1 | Out-String
+      $LASTEXITCODE | Should -Be 0
+      $out | Should -Match 'Propagate-HubTemplateToChildren\.ps1'
+      $out | Should -Match '-FolderName'
+      $out | Should -Match 'iplan-prev-2142'
+      $out | Should -Match '-BranchName'
+      $out | Should -Match 'hub/propagate-demo'
+    }
+
+    It 'propagate --profile --include-mcp-merge mapea StackProfile e IncludeMcpMerge' {
+      $out = & bash $script:hubLauncher propagate --profile ConsultingAI --include-mcp-merge 2>&1 | Out-String
+      $LASTEXITCODE | Should -Be 0
+      $out | Should -Match 'Propagate-HubTemplateToChildren\.ps1'
+      $out | Should -Match '-StackProfile'
+      $out | Should -Match 'ConsultingAI'
+      $out | Should -Match '-IncludeMcpMerge'
+    }
   }
 
   It 'no contiene lógica de negocio prohibida' {
