@@ -114,14 +114,18 @@ function Get-GentleAiEngramStatus {
   }
 }
 
-function Get-GentleAiEnvironment {
-  param([string] $TargetPath, [string] $UserHome)
+function Get-GentleAiDualInstallDiagnosis {
+  <#
+    Detect-only: reports global+workspace gentle-ai coexistence.
+    MUST NOT install, sync, upgrade, remove, or auto-fix either install.
+  #>
+  param(
+    [string] $TargetPath,
+    [string] $UserHome
+  )
   $UserHome = Get-GentleAiUserHome -UserHome $UserHome
-  $cliStatus = Resolve-GentleAiCliStatus
-  $cliPaths = @($cliStatus.Paths)
   $globalRule = Join-HubPath $UserHome '.cursor' 'rules' 'gentle-ai.mdc'
   $globalState = Join-HubPath $UserHome '.gentle-ai' 'state.json'
-  $globalMcp = Join-HubPath $UserHome '.cursor' 'mcp.json'
   $globalMarkers = @(
     $globalRule,
     (Join-HubPath $UserHome '.cursor' 'agents' 'sdd-init.md'),
@@ -133,19 +137,67 @@ function Get-GentleAiEnvironment {
     catch { $stateMentionsCursor = $false }
   }
   $workspaceMarkers = @()
-  $workspaceMcp = $null
   if (-not [string]::IsNullOrWhiteSpace($TargetPath)) {
     $workspaceMarkers = @(
       (Join-HubPath $TargetPath '.cursor' 'rules' 'gentle-ai.mdc'),
       (Join-HubPath $TargetPath '.cursor' 'agents' 'sdd-init.md'),
       (Join-HubPath $TargetPath '.cursor' 'skills' 'sdd-init' 'SKILL.md')
     )
-    $workspaceMcp = Join-HubPath $TargetPath '.cursor' 'mcp.json'
   }
   $existingWorkspaceMarkers = @($workspaceMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
   $existingGlobalMarkers = @($globalMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
   $globalInstalled = ($existingGlobalMarkers.Count -gt 0) -or $stateMentionsCursor
   $workspaceInstalled = $existingWorkspaceMarkers.Count -gt 0
+  $dual = $globalInstalled -and $workspaceInstalled
+
+  if ($dual) {
+    return [pscustomobject]@{
+      Dual = $true
+      Status = 'Conflict'
+      GlobalInstalled = $true
+      WorkspaceInstalled = $true
+      GlobalMarkerPaths = @($existingGlobalMarkers)
+      WorkspaceMarkerPaths = @($existingWorkspaceMarkers)
+      Message = "Se detecto asistencia instalada a la vez en el perfil global y en este workspace. No se modifica ninguna instalacion; reporta el conflicto y pedi al usuario que elija un unico alcance."
+    }
+  }
+
+  return [pscustomobject]@{
+    Dual = $false
+    Status = 'Ok'
+    GlobalInstalled = $globalInstalled
+    WorkspaceInstalled = $workspaceInstalled
+    GlobalMarkerPaths = @($existingGlobalMarkers)
+    WorkspaceMarkerPaths = @($existingWorkspaceMarkers)
+    Message = $null
+  }
+}
+
+function Test-GentleAiDualInstall {
+  param(
+    [string] $TargetPath,
+    [string] $UserHome
+  )
+  return [bool](Get-GentleAiDualInstallDiagnosis -TargetPath $TargetPath -UserHome $UserHome).Dual
+}
+
+function Get-GentleAiEnvironment {
+  param([string] $TargetPath, [string] $UserHome)
+  $UserHome = Get-GentleAiUserHome -UserHome $UserHome
+  $cliStatus = Resolve-GentleAiCliStatus
+  $cliPaths = @($cliStatus.Paths)
+  $globalRule = Join-HubPath $UserHome '.cursor' 'rules' 'gentle-ai.mdc'
+  $globalState = Join-HubPath $UserHome '.gentle-ai' 'state.json'
+  $globalMcp = Join-HubPath $UserHome '.cursor' 'mcp.json'
+  $dual = Get-GentleAiDualInstallDiagnosis -TargetPath $TargetPath -UserHome $UserHome
+  $existingWorkspaceMarkers = @($dual.WorkspaceMarkerPaths)
+  $existingGlobalMarkers = @($dual.GlobalMarkerPaths)
+  $globalInstalled = [bool]$dual.GlobalInstalled
+  $workspaceInstalled = [bool]$dual.WorkspaceInstalled
+  $workspaceMcp = $null
+  if (-not [string]::IsNullOrWhiteSpace($TargetPath)) {
+    $workspaceMcp = Join-HubPath $TargetPath '.cursor' 'mcp.json'
+  }
   $globalEngram = Test-GentleAiMcpServerConfigured -McpJsonPath $globalMcp -ServerName 'engram'
   $workspaceEngram = if ($workspaceMcp) {
     Test-GentleAiMcpServerConfigured -McpJsonPath $workspaceMcp -ServerName 'engram'
@@ -159,7 +211,7 @@ function Get-GentleAiEnvironment {
     'WindowsOriginRejected' { $issues.Add('windows-origin-cli') }
     'Missing' { $notes.Add('cli-missing') }
   }
-  if ($globalInstalled -and $workspaceInstalled) { $issues.Add('global-workspace-duplicate') }
+  if ($dual.Dual) { $issues.Add('global-workspace-duplicate') }
   if ($engramStatus.Status -eq 'WorkspaceDuplicate') { $issues.Add('workspace-engram-mcp') }
   elseif ($engramStatus.Status -eq 'Missing' -and $globalInstalled) {
     $notes.Add('engram-global-missing')
@@ -186,6 +238,7 @@ function Get-GentleAiEnvironment {
     WorkspaceEngramConfigured = $workspaceEngram
     EngramStatus = $engramStatus.Status
     EngramMessage = $engramStatus.Message
+    DualInstall = $dual
     Issues = @($issues)
     Notes = @($notes)
     Healthy = ($issues.Count -eq 0)
@@ -481,6 +534,7 @@ function Resolve-GentleAiPreflight {
 Export-ModuleMember -Function @(
   'Get-GentleAiUserHome', 'Test-GentleAiMcpServerConfigured',
   'Get-GentleAiRawCommandPaths', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
+  'Get-GentleAiDualInstallDiagnosis', 'Test-GentleAiDualInstall',
   'Get-GentleAiEnvironment', 'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
   'Resolve-GentleAiScopeDecision', 'Invoke-GentleAiInstall', 'Invoke-SkillRegistryRefresh',
   'Resolve-GentleAiPreflight'

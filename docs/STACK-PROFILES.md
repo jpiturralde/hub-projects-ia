@@ -11,6 +11,32 @@
 
 `New-IngeniaTemplateProject.ps1` ahora genera ConsultingAI.
 
+## Validación de entorno (`requires`)
+
+Cada hijo emitido lleva un vector machine-readable en la metadata raíz (`schemaVersion` **4**):
+
+- Consulting / ConsultingAI / Full → `.consulting-engagement.json` + bloque `requires`
+- GentleAi → `.project-profile.json` + bloque `requires`
+
+Forma:
+
+```json
+{ "version": 1, "tools": [{ "id": "node", "level": "required" }] }
+```
+
+Ids: `node` | `npm` | `npx` | `pandoc` | `backlog` | `archi` | `gentle-ai`. Solo se emiten tools no-`absent`. Engram **nunca** es un tool ni se escribe en el MCP del hijo.
+
+Verificación:
+
+1. Primaria (sin pwsh obligatorio): `docs/GETTING-STARTED.md` + `/onboarding` (copy en español).
+2. Opcional: `scripts/Test-ProjectEnvironment.ps1` en el hijo, o desde el hub `./scripts/hub env <ruta>`.
+
+Detect-only (no instala). Exit `2` si falla un tool `required` o el MCP local está `broken`. `not-materialized` ≠ `broken`. Mensajes del doctor en **español**.
+
+`-AsJson` congelado: `{ ok, exitCode, checks[{ id, level, pass, state, message }] }` con `state` ∈ `ok|missing|failed|not-materialized|configured|broken|n/a`.
+
+Retrofit de hijos del registry: `./scripts/hub refresh --all` (mismo writer que `Refresh-ProjectGettingStarted.ps1`; sin copy-in). Manual: `pwsh -File ./scripts/Refresh-ProjectGettingStarted.ps1 -TargetPath <abs>`.
+
 ## Resolución de alcance
 
 | Estado detectado | Auto | Global | Workspace | Existing |

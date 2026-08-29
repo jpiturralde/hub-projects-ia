@@ -50,19 +50,33 @@
     "docs/templates/.gitkeep",
     "PROJECT-CONTEXT.md",
     "README.md",
+    "scripts/Test-ProjectEnvironment.ps1",
     "SPEC.md",
     "transcripts/README.md"
   ],
   "mcpServers": [],
   "metadata": {
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "stackProfile": "consulting-only",
     "requestedProfile": "Consulting",
     "engramMcpSource": "none",
     "gentleAiScope": "none",
     "includeDrawioMcp": false,
     "includeBacklogMcp": false,
-    "includeArchiMcp": false
+    "includeArchiMcp": false,
+    "requires": {
+      "version": 1,
+      "tools": [
+        {
+          "id": "pandoc",
+          "level": "optional"
+        },
+        {
+          "id": "backlog",
+          "level": "optional"
+        }
+      ]
+    }
   },
   "gentleAiMarkers": {
     "workspaceGentleAiRule": false,

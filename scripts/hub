@@ -17,6 +17,7 @@ Comandos:
   doctor [args...]              Preflight / diagnóstico (Install-ConsultingCopilot.ps1)
   new [args...]                 Crear proyecto bajo projects/ (New-HubProject.ps1)
   test <ruta> [args...]         Smoke read-only del hijo (Test-HubProject.ps1)
+  env <ruta> [args...]          Diagnóstico de entorno del hijo (Test-HubChildEnvironment.ps1)
   refresh [ruta|--all] [args...]  Regenera GETTING-STARTED (Refresh-ProjectGettingStarted.ps1)
   help, -h, --help              Esta ayuda
 
@@ -26,6 +27,7 @@ Ejemplos:
     -ClientDisplayName "IPLAN" -ClientSlug "iplan" \
     -InitiativeDisplayName "Gobierno de APIs" -InitiativeId "U01"
   ./scripts/hub test projects/iplan-prev-2142 -ExpectedProfile ConsultingAI
+  ./scripts/hub env projects/iplan-prev-2142
   ./scripts/hub refresh projects/iplan-prev-2142
   ./scripts/hub refresh --all
 
@@ -125,6 +127,16 @@ Ejemplo: ./scripts/hub test projects/iplan-prev-2142 -ExpectedProfile Consulting
       target="$(resolve_hub_path "$1")"
       shift
       invoke_pwsh "Test-HubProject.ps1" -TargetPath "${target}" "$@"
+      ;;
+    env)
+      if [[ $# -eq 0 ]]; then
+        die 1 "Uso: ./scripts/hub env <ruta-proyecto> [args...]
+Ejemplo: ./scripts/hub env projects/iplan-prev-2142 -AsJson"
+      fi
+      local target
+      target="$(resolve_hub_path "$1")"
+      shift
+      invoke_pwsh "Test-HubChildEnvironment.ps1" -TargetPath "${target}" "$@"
       ;;
     refresh)
       if [[ $# -eq 0 || "${1:-}" == "--all" ]]; then

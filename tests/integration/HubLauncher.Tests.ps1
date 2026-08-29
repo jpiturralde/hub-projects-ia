@@ -101,6 +101,14 @@ Describe 'Launcher Bash scripts/hub' {
       $out | Should -Match 'Refresh-ProjectGettingStarted\.ps1'
       $out | Should -Match '-TargetPath'
     }
+
+    It 'env traduce a Test-HubChildEnvironment.ps1 con -TargetPath' {
+      $out = & bash -c "cd '$($script:repoRoot)' && HUB_LAUNCHER_TRACE=1 ./scripts/hub env projects/iplan-prev-2142 -AsJson" 2>&1 | Out-String
+      $LASTEXITCODE | Should -Be 0
+      $out | Should -Match 'Test-HubChildEnvironment\.ps1'
+      $out | Should -Match '-TargetPath'
+      $out | Should -Match 'iplan-prev-2142'
+    }
   }
 
   It 'no contiene lógica de negocio prohibida' {

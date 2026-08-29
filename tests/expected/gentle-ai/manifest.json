@@ -11,14 +11,24 @@
     ".project-profile.json",
     "docs/GETTING-STARTED.md",
     "PROJECT-CONTEXT.md",
-    "README.md"
+    "README.md",
+    "scripts/Test-ProjectEnvironment.ps1"
   ],
   "mcpServers": [],
   "metadata": {
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "stackProfile": "gentle-ai-only",
     "projectName": "equiv-app",
-    "gentleAiScope": "global"
+    "gentleAiScope": "global",
+    "requires": {
+      "version": 1,
+      "tools": [
+        {
+          "id": "gentle-ai",
+          "level": "required"
+        }
+      ]
+    }
   },
   "gentleAiMarkers": {
     "workspaceGentleAiRule": false,
