@@ -138,14 +138,17 @@ Describe 'DryRun / Sync never-touch / McpMerge' {
       Should -Throw '*denylist*'
   }
 
-  It 'McpMerge añade solo keys ausentes desde staging' {
+  It 'McpMerge añade solo keys ausentes desde staging y preserva top-level' {
     $dest = Join-Path $script:sandbox.Root 'mcp-dest'
     $staging = Join-Path $script:sandbox.Root 'mcp-staging'
     Register-TestSandboxWrite -Path $dest
     Register-TestSandboxWrite -Path $staging
     New-Item -ItemType Directory -Path (Join-Path $dest '.cursor'), (Join-Path $staging '.cursor') -Force | Out-Null
 
-    $destMcp = @{ mcpServers = @{ keep = @{ command = 'keep-cmd' }; shared = @{ command = 'child-shared' } } } | ConvertTo-Json -Depth 5
+    $destMcp = @{
+      '$schema' = 'https://example.invalid/mcp.schema.json'
+      mcpServers = @{ keep = @{ command = 'keep-cmd' }; shared = @{ command = 'child-shared' } }
+    } | ConvertTo-Json -Depth 5
     $stagingMcp = @{ mcpServers = @{ shared = @{ command = 'staging-shared' }; neu = @{ command = 'neu-cmd' } } } | ConvertTo-Json -Depth 5
     [System.IO.File]::WriteAllText((Join-Path $dest '.cursor' 'mcp.json'), $destMcp + "`n", [Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText((Join-Path $staging '.cursor' 'mcp.json'), $stagingMcp + "`n", [Text.UTF8Encoding]::new($false))
@@ -153,6 +156,7 @@ Describe 'DryRun / Sync never-touch / McpMerge' {
     Sync-HubTemplatePaths -StagingPath $staging -DestinationPath $dest -Plan @() -IncludeMcpMerge
 
     $merged = Get-Content -LiteralPath (Join-Path $dest '.cursor' 'mcp.json') -Raw | ConvertFrom-Json
+    $merged.'$schema' | Should -Be 'https://example.invalid/mcp.schema.json'
     $names = @($merged.mcpServers.PSObject.Properties.Name)
     $names | Should -Contain 'keep'
     $names | Should -Contain 'shared'
@@ -228,18 +232,34 @@ Describe 'Git gate / empty plan / -All exit codes' {
     (Get-Content -LiteralPath (Join-Path $dest 'marker.txt') -Raw).Trim() | Should -Be 'keep'
   }
 
-  It 'orquestador source: empty plan y DryRun no llaman Sync' {
+  It 'orquestador source: empty plan y DryRun no llaman Sync; staging antes de Ensure' {
     $src = Get-Content -LiteralPath (Join-Path $script:repoRoot 'scripts\Propagate-HubTemplateToChildren.ps1') -Raw
     $src | Should -Match 'if \(\$\w*DryRun\)'
     $src | Should -Match 'Plan vacío: no se crea worktree'
     $src | Should -Match 'Sync-HubTemplatePaths'
-    # DryRun continue before Ensure/Sync
+    $src | Should -Match 'New-HubPropagationStaging'
+    $src | Should -Match 'Select-HubPropagationPlanPresentInStaging'
+    # DryRun continue before Ensure/Sync; staging before Ensure on apply
     $dryIdx = $src.IndexOf('if ($DryRun)')
+    $stagingIdx = $src.IndexOf('New-HubPropagationStaging')
     $ensureIdx = $src.IndexOf('Ensure-HubPropagationWorktree')
     $syncIdx = $src.IndexOf('Sync-HubTemplatePaths')
     $dryIdx | Should -BeGreaterThan 0
-    $ensureIdx | Should -BeGreaterThan $dryIdx
+    $stagingIdx | Should -BeGreaterThan 0
+    $ensureIdx | Should -BeGreaterThan $stagingIdx
     $syncIdx | Should -BeGreaterThan $ensureIdx
+    $dryIdx | Should -BeLessThan $ensureIdx
+  }
+
+  It 'SafeBranch y FolderName rechazan traversal' {
+    { ConvertTo-HubPropagationSafeBranch -BranchName '..' } | Should -Throw
+    { ConvertTo-HubPropagationSafeBranch -BranchName 'hub/../x' } | Should -Throw
+    { ConvertTo-HubPropagationRelativePath -Path '../secrets' } | Should -Throw
+    { ConvertTo-HubPropagationRelativePath -Path './backlog.md' } | Should -Not -Throw
+    (ConvertTo-HubPropagationRelativePath -Path './backlog.md') | Should -Be 'backlog.md'
+    {
+      Get-HubPropagationWorktreePath -HubRoot $script:sandbox.Root -FolderName 'a/../../b' -SafeBranch 'ok'
+    } | Should -Throw
   }
 }
 

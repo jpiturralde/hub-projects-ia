@@ -4,9 +4,10 @@
   Propagates hub template allowlist paths into selected child projects (opt-in).
 
 .DESCRIPTION
-  Registry v2 selection → plan via Get-HubPropagatablePaths → DryRun prints plan only.
-  Apply uses hub-side git worktree/branch, re-stages with child metadata, syncs
-  allowlist ∩ staging, never promotes staging, never writes the live checkout.
+  Registry v2 selection → plan via Get-HubPropagatablePaths → DryRun prints plan only
+  (effective plan ∩ staging). Apply stages first, then hub-side git worktree/branch only
+  when there is work (paths and/or IncludeMcpMerge), syncs allowlist ∩ staging, never
+  promotes staging, never writes the live checkout.
 
 .EXAMPLE
   pwsh -File ./Propagate-HubTemplateToChildren.ps1 -FolderName iplan-prev-2142 -DryRun
@@ -56,6 +57,17 @@ if (-not [string]::IsNullOrWhiteSpace($FolderName)) {
     throw "No hay proyecto registrado con folderName '$FolderName'."
   }
   $selected = $match
+} elseif ($All -and -not [string]::IsNullOrWhiteSpace($StackProfile)) {
+  # -All ∩ -StackProfile: filter by profile (do not silently ignore --profile).
+  $selected = @(
+    $registry.Projects | Where-Object {
+      $profile = if ($_.Entry -and $_.Entry.PSObject.Properties.Name -contains 'stackProfile') {
+        [string]$_.Entry.stackProfile
+      } else { '' }
+      if ([string]::IsNullOrWhiteSpace($profile)) { return $false }
+      Test-HubPropagationProfileMatch -RegistryProfile $profile -FilterProfile $StackProfile
+    }
+  )
 } elseif ($All) {
   $selected = @($registry.Projects)
 } else {
@@ -80,23 +92,33 @@ $skips = [System.Collections.Generic.List[string]]::new()
 $empties = [System.Collections.Generic.List[string]]::new()
 $successes = [System.Collections.Generic.List[string]]::new()
 
-function Get-ChildRegistryProfile {
-  param($Item)
-  if ($Item.Entry -and $Item.Entry.PSObject.Properties.Name -contains 'stackProfile' -and $Item.Entry.stackProfile) {
-    $raw = [string]$Item.Entry.stackProfile
-    switch ($raw.Trim()) {
-      'consulting-ai' { return 'ConsultingAI' }
-      'consulting-only' { return 'Consulting' }
-      'gentle-ai-only' { return 'GentleAi' }
-      'full' { return 'Full' }
-      default { return $raw.Trim() }
+function Get-ChildDiskProfileForPlan {
+  param(
+    [string] $ChildRoot,
+    [string] $RegistryProfileLabel
+  )
+  $diskProfile = Get-HubProjectProfileFromRoot -Root $ChildRoot
+  if ($diskProfile -eq 'Full') { $diskProfile = 'ConsultingAI' }
+  if ($diskProfile -notin @('Consulting', 'ConsultingAI', 'GentleAi')) {
+    throw "Perfil en disco no soportado para propagate: $diskProfile ($ChildRoot)"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($RegistryProfileLabel)) {
+    $regNorm = switch ($RegistryProfileLabel.Trim()) {
+      'consulting-ai' { 'ConsultingAI' }
+      'consulting-only' { 'Consulting' }
+      'gentle-ai-only' { 'GentleAi' }
+      'full' { 'ConsultingAI' }
+      'Full' { 'ConsultingAI' }
+      default { $RegistryProfileLabel.Trim() }
+    }
+    if ($regNorm -eq 'Full') { $regNorm = 'ConsultingAI' }
+    if ($regNorm -ne $diskProfile -and -not (
+        ($regNorm -in @('ConsultingAI', 'Full') -and $diskProfile -eq 'ConsultingAI')
+      )) {
+      Write-Warning "Perfil registry ($RegistryProfileLabel) ≠ disco ($diskProfile); se usa disco para plan/staging."
     }
   }
-  if ($Item.Exists -and $Item.ResolvedPath) {
-    $fromDisk = Get-HubProjectProfileFromRoot -Root $Item.ResolvedPath
-    if ($fromDisk -ne 'Unknown') { return $fromDisk }
-  }
-  return 'ConsultingAI'
+  return $diskProfile
 }
 
 function Write-PropagationPlan {
@@ -104,12 +126,16 @@ function Write-PropagationPlan {
     [string] $Label,
     [string] $ChildPath,
     [object] $PlanInfo,
-    [string[]] $EffectivePlan = @()
+    [string[]] $EffectivePlan = @(),
+    [string] $Note = ''
   )
   Write-Host ""
   Write-Host "=== Propagate plan: $Label ===" -ForegroundColor Cyan
   Write-Host "Child: $ChildPath"
   Write-Host "Golden: $($PlanInfo.GoldenName) | profile: $($PlanInfo.StackProfile)"
+  if (-not [string]::IsNullOrWhiteSpace($Note)) {
+    Write-Host $Note
+  }
   Write-Host "Plan paths ($($EffectivePlan.Count)):"
   if ($EffectivePlan.Count -eq 0) {
     Write-Host '  (empty)'
@@ -139,62 +165,53 @@ foreach ($item in $selected) {
       continue
     }
 
-    $profileForPlan = Get-ChildRegistryProfile -Item $item
-    if ($profileForPlan -eq 'Full') { $profileForPlan = 'ConsultingAI' }
-    if ($profileForPlan -notin @('Consulting', 'ConsultingAI', 'GentleAi')) {
-      # Fall back to disk profile resolution for unexpected registry labels.
-      $diskProfile = Get-HubProjectProfileFromRoot -Root $childRoot
-      if ($diskProfile -eq 'Full') { $diskProfile = 'ConsultingAI' }
-      if ($diskProfile -in @('Consulting', 'ConsultingAI', 'GentleAi')) {
-        $profileForPlan = $diskProfile
-      } else {
-        throw "Perfil no soportado para propagate: $profileForPlan"
-      }
+    $registryLabel = ''
+    if ($item.Entry -and $item.Entry.PSObject.Properties.Name -contains 'stackProfile') {
+      $registryLabel = [string]$item.Entry.stackProfile
     }
-
+    $profileForPlan = Get-ChildDiskProfileForPlan -ChildRoot $childRoot -RegistryProfileLabel $registryLabel
     $plan0 = Get-HubPropagatablePaths -HubRoot $hubRoot -StackProfile $profileForPlan
 
-    if ($DryRun) {
-      $annotated = foreach ($relative in @($plan0.Plan)) {
-        $childFile = Join-Path $childRoot ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-        $action = if (Test-Path -LiteralPath $childFile -PathType Leaf) { 'update' } else { 'add' }
-        "$action  $relative"
-      }
-      Write-PropagationPlan -Label $label -ChildPath $childRoot -PlanInfo $plan0 -EffectivePlan @($annotated)
-      if ($plan0.Plan.Count -eq 0) {
-        $empties.Add($label) | Out-Null
-      } else {
-        $successes.Add($label) | Out-Null
-      }
-      continue
-    }
-
-    if (@($plan0.Plan).Count -eq 0) {
-      Write-PropagationPlan -Label $label -ChildPath $childRoot -PlanInfo $plan0 -EffectivePlan @()
-      Write-Host "Plan vacío: no se crea worktree/branch para $label."
-      $empties.Add($label) | Out-Null
-      continue
-    }
-
-    $wt = $null
     $stagingPath = $null
     try {
+      $stagingPath = New-HubPropagationStaging -HubRoot $hubRoot -ChildRoot $childRoot
+      $effectivePlan = @(Select-HubPropagationPlanPresentInStaging -StagingPath $stagingPath -Plan @($plan0.Plan))
+
+      if ($DryRun) {
+        $annotated = foreach ($relative in $effectivePlan) {
+          $childFile = Join-Path $childRoot ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+          $action = if (Test-Path -LiteralPath $childFile -PathType Leaf) { 'update' } else { 'add' }
+          "$action  $relative"
+        }
+        Write-PropagationPlan `
+          -Label $label `
+          -ChildPath $childRoot `
+          -PlanInfo $plan0 `
+          -EffectivePlan @($annotated) `
+          -Note 'DryRun: plan efectivo ∩ staging (vs live checkout; Apply escribe worktree).'
+        if ($effectivePlan.Count -eq 0 -and -not $IncludeMcpMerge) {
+          $empties.Add($label) | Out-Null
+        } else {
+          $successes.Add($label) | Out-Null
+        }
+        continue
+      }
+
+      $hasWork = ($effectivePlan.Count -gt 0) -or $IncludeMcpMerge
+      if (-not $hasWork) {
+        Write-PropagationPlan -Label $label -ChildPath $childRoot -PlanInfo $plan0 -EffectivePlan @()
+        Write-Host "Plan vacío: no se crea worktree/branch para $label."
+        $empties.Add($label) | Out-Null
+        continue
+      }
+
       $wt = Ensure-HubPropagationWorktree `
         -HubRoot $hubRoot `
         -ChildRoot $childRoot `
         -FolderName $label `
         -BranchName $BranchName
       Write-Host "Worktree ($($wt.SafeBranch)) reused=$($wt.Reused): $($wt.WorktreePath)"
-
-      $stagingPath = New-HubPropagationStaging -HubRoot $hubRoot -ChildRoot $childRoot
-      $effectivePlan = @(Select-HubPropagationPlanPresentInStaging -StagingPath $stagingPath -Plan @($plan0.Plan))
       Write-PropagationPlan -Label $label -ChildPath $wt.WorktreePath -PlanInfo $plan0 -EffectivePlan $effectivePlan
-
-      if ($effectivePlan.Count -eq 0) {
-        Write-Host "Plan efectivo vacío tras ∩ staging: no Sync para $label."
-        $empties.Add($label) | Out-Null
-        continue
-      }
 
       Sync-HubTemplatePaths `
         -StagingPath $stagingPath `
@@ -229,6 +246,9 @@ foreach ($item in $selected) {
 Write-Host ''
 Write-Host '=== Propagate summary ===' -ForegroundColor Green
 Write-Host "Success: $($successes.Count) | Empty plan: $($empties.Count) | Skip: $($skips.Count) | Failure: $($failures.Count)"
+if ($successes.Count -eq 0 -and $empties.Count -eq 0 -and $skips.Count -gt 0 -and $failures.Count -eq 0) {
+  Write-Warning 'Ningún hijo propagado (solo skips). Exit 0 por contrato skip≠failure / all-skip→0.'
+}
 if ($failures.Count -gt 0) {
   foreach ($f in $failures) { Write-Host "  FAIL $f" -ForegroundColor Red }
   exit 1

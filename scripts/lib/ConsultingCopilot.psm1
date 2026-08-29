@@ -2496,7 +2496,18 @@ $script:HubPropagationHybridExact = @(
 
 function ConvertTo-HubPropagationRelativePath {
   param([Parameter(Mandatory = $true)][string] $Path)
-  return (($Path -replace '\\', '/').TrimStart('/'))
+  $normalized = (($Path -replace '\\', '/').Trim())
+  while ($normalized.StartsWith('./')) {
+    $normalized = $normalized.Substring(2)
+  }
+  $normalized = $normalized.TrimStart('/')
+  if ([string]::IsNullOrWhiteSpace($normalized)) {
+    throw "Path relativo vacío tras normalizar: $Path"
+  }
+  if ($normalized -match '(^|/)\.\.(/|$)' -or $normalized -match '^[A-Za-z]:' -or $normalized.StartsWith('/')) {
+    throw "Path relativo inseguro (traversal o absoluto): $Path"
+  }
+  return $normalized
 }
 
 function Test-HubPropagationDeniedPath {
@@ -2754,14 +2765,16 @@ function New-HubPropagationStaging {
         Copy-StartiaMcpPolicy -SourceRoot $hub -TargetPath $stagingPath
       }
       $archiArgs = @($ctx.ArchiMcpArgs)
-      if ($ctx.IncludeArchiMcp -and $archiArgs.Count -eq 0) {
-        # Keep flag but avoid throwing on missing archi path during re-stage.
-        $archiArgs = @('/dev/null')
+      $includeArchiForMcp = [bool]$ctx.IncludeArchiMcp
+      if ($includeArchiForMcp -and $archiArgs.Count -eq 0) {
+        # Do not invent placeholder args (e.g. /dev/null) that IncludeMcpMerge could copy.
+        Write-Warning "includeArchiMcp=true sin args en mcp del hijo; se omite archi en staging MCP."
+        $includeArchiForMcp = $false
       }
       $mcp = Get-ConsultingMcpServers `
         -IncludeDrawioMcp $ctx.IncludeDrawioMcp `
         -IncludeBacklogMcp $ctx.IncludeBacklogMcp -BacklogMcpCwd $ctx.ChildRoot `
-        -IncludeArchiMcp $ctx.IncludeArchiMcp -ArchiMcpArgs $archiArgs `
+        -IncludeArchiMcp $includeArchiForMcp -ArchiMcpArgs $archiArgs `
         -IncludeStartiaMcp $ctx.IncludeStartiaMcp
       Write-ConsultingMcpJson -TargetPath $stagingPath -McpServers $mcp
       $stackProfileValue = if ($ctx.StackProfile -eq 'ConsultingAI') { 'consulting-ai' } else { 'consulting-only' }
@@ -2840,9 +2853,14 @@ function Merge-HubPropagationMcpMissingKeys {
     New-Item -ItemType Directory -Path $destCursor -Force | Out-Null
   }
   $destMcp = Join-Path $destCursor 'mcp.json'
+  $destRoot = [ordered]@{}
   $destServers = [ordered]@{}
   if (Test-Path -LiteralPath $destMcp -PathType Leaf) {
     $destConfig = Get-Content -LiteralPath $destMcp -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($prop in @($destConfig.PSObject.Properties)) {
+      if ($prop.Name -eq 'mcpServers') { continue }
+      $destRoot[$prop.Name] = $prop.Value
+    }
     if ($destConfig.mcpServers) {
       foreach ($prop in @($destConfig.mcpServers.PSObject.Properties)) {
         $destServers[$prop.Name] = $prop.Value
@@ -2857,7 +2875,8 @@ function Merge-HubPropagationMcpMissingKeys {
     $added++
   }
   if ($added -eq 0) { return }
-  $json = @{ mcpServers = $destServers } | ConvertTo-Json -Depth 10
+  $destRoot['mcpServers'] = [pscustomobject]$destServers
+  $json = ($destRoot | ConvertTo-Json -Depth 10)
   [System.IO.File]::WriteAllText($destMcp, $json + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
@@ -2910,6 +2929,9 @@ function ConvertTo-HubPropagationSafeBranch {
   if ([string]::IsNullOrWhiteSpace($safe) -or $safe -notmatch '^[A-Za-z0-9._-]+$') {
     throw "BranchName inseguro tras sanitize (solo alfanumérico, '-', '_', '.'): $BranchName"
   }
+  if ($safe -eq '.' -or $safe -eq '..' -or $safe.Contains('..')) {
+    throw "BranchName inseguro (segmentos '.' / '..' no permitidos): $BranchName"
+  }
   return $safe
 }
 
@@ -2928,7 +2950,23 @@ function Get-HubPropagationWorktreePath {
     [Parameter(Mandatory = $true)][string] $FolderName,
     [Parameter(Mandatory = $true)][string] $SafeBranch
   )
-  return (Join-HubPath (Resolve-HubRootPath $HubRoot) '.hub-propagate-worktrees' $FolderName $SafeBranch)
+  if ([string]::IsNullOrWhiteSpace($FolderName) -or
+      $FolderName -match '[/\\]' -or
+      $FolderName -eq '.' -or
+      $FolderName -eq '..' -or
+      $FolderName.Contains('..')) {
+    throw "FolderName inseguro para worktree path: $FolderName"
+  }
+  if ($SafeBranch -eq '.' -or $SafeBranch -eq '..' -or $SafeBranch.Contains('..')) {
+    throw "SafeBranch inseguro para worktree path: $SafeBranch"
+  }
+  $hub = Resolve-HubRootPath $HubRoot
+  $wtRoot = Join-HubPath $hub '.hub-propagate-worktrees'
+  $path = Join-HubPath $wtRoot $FolderName $SafeBranch
+  if (-not (Test-HubPathIsChildOf -ChildPath $path -ParentPath $wtRoot)) {
+    throw "Worktree path escapa .hub-propagate-worktrees/: $path"
+  }
+  return $path
 }
 
 function Test-HubPropagationBranchExists {
@@ -2972,7 +3010,17 @@ function Ensure-HubPropagationWorktree {
         Reused = $true
       }
     }
-    throw "Worktree path existe pero no pertenece a branch '$BranchName' (HEAD='$existingBranch'): $worktreePath"
+    # Residual non-worktree directory (failed prior add): remove if under worktrees root.
+    $wtRoot = Join-HubPath (Resolve-HubRootPath $HubRoot) '.hub-propagate-worktrees'
+    $isGitCheckout = $false
+    & git -C $worktreePath rev-parse --is-inside-work-tree 1>$null 2>$null
+    if ($LASTEXITCODE -eq 0) { $isGitCheckout = $true }
+    if (-not $isGitCheckout -and (Test-HubPathIsChildOf -ChildPath $worktreePath -ParentPath $wtRoot)) {
+      Write-Warning "Eliminando path residual no-worktree: $worktreePath"
+      Remove-Item -LiteralPath $worktreePath -Recurse -Force -ErrorAction Stop
+    } else {
+      throw "Worktree path existe pero no pertenece a branch '$BranchName' (HEAD='$existingBranch'): $worktreePath"
+    }
   }
 
   if (Test-HubPropagationBranchExists -ChildRoot $ChildRoot -BranchName $BranchName) {
@@ -2984,9 +3032,9 @@ Cleanup sugerido:
 "@
   }
 
-  & git -C $ChildRoot worktree add -b $BranchName $worktreePath 2>&1 | Out-Null
+  $addOut = & git -C $ChildRoot worktree add -b $BranchName $worktreePath 2>&1 | Out-String
   if ($LASTEXITCODE -ne 0) {
-    throw "git worktree add falló para branch '$BranchName' en $worktreePath (exit $LASTEXITCODE)"
+    throw "git worktree add falló para branch '$BranchName' en $worktreePath (exit $LASTEXITCODE): $($addOut.Trim())"
   }
 
   return [pscustomobject]@{
@@ -3054,6 +3102,7 @@ Export-ModuleMember -Function @(
   'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths',
   'Get-HubPropagatablePaths', 'New-HubPropagationStaging', 'Sync-HubTemplatePaths',
   'Select-HubPropagationPlanPresentInStaging', 'ConvertTo-HubPropagationSafeBranch',
+  'ConvertTo-HubPropagationRelativePath',
   'Test-HubChildGitUsable', 'Get-HubPropagationWorktreePath', 'Ensure-HubPropagationWorktree',
   'Test-HubPropagationProfileMatch', 'Get-HubPropagationChildContext', 'Get-HubProjectProfileFromRoot',
   'Test-HubPropagationDeniedPath', 'Test-HubPropagationHybridPath', 'Test-HubPropagationArchimateDiagramPath',
