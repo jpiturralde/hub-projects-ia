@@ -170,12 +170,24 @@ foreach ($item in $selected) {
       $registryLabel = [string]$item.Entry.stackProfile
     }
     $profileForPlan = Get-ChildDiskProfileForPlan -ChildRoot $childRoot -RegistryProfileLabel $registryLabel
+
+    # If -StackProfile was requested (alone, with -All, or with FolderName), disk must match.
+    if (-not [string]::IsNullOrWhiteSpace($StackProfile)) {
+      if (-not (Test-HubPropagationProfileMatch -RegistryProfile $profileForPlan -FilterProfile $StackProfile)) {
+        Write-Warning "Skip $label : disco ($profileForPlan) no coincide con -StackProfile $StackProfile."
+        $skips.Add($label) | Out-Null
+        continue
+      }
+    }
+
     $plan0 = Get-HubPropagatablePaths -HubRoot $hubRoot -StackProfile $profileForPlan
 
     $stagingPath = $null
     try {
       $stagingPath = New-HubPropagationStaging -HubRoot $hubRoot -ChildRoot $childRoot
       $effectivePlan = @(Select-HubPropagationPlanPresentInStaging -StagingPath $stagingPath -Plan @($plan0.Plan))
+      $stagingMcpPath = Join-Path $stagingPath '.cursor' 'mcp.json'
+      $mcpMergeable = $IncludeMcpMerge -and (Test-Path -LiteralPath $stagingMcpPath -PathType Leaf)
 
       if ($DryRun) {
         $annotated = foreach ($relative in $effectivePlan) {
@@ -183,13 +195,15 @@ foreach ($item in $selected) {
           $action = if (Test-Path -LiteralPath $childFile -PathType Leaf) { 'update' } else { 'add' }
           "$action  $relative"
         }
+        $note = 'DryRun: plan efectivo ∩ staging (vs live checkout; Apply escribe worktree).'
+        if ($mcpMergeable) { $note += ' IncludeMcpMerge: staging mcp.json presente.' }
         Write-PropagationPlan `
           -Label $label `
           -ChildPath $childRoot `
           -PlanInfo $plan0 `
           -EffectivePlan @($annotated) `
-          -Note 'DryRun: plan efectivo ∩ staging (vs live checkout; Apply escribe worktree).'
-        if ($effectivePlan.Count -eq 0 -and -not $IncludeMcpMerge) {
+          -Note $note
+        if ($effectivePlan.Count -eq 0 -and -not $mcpMergeable) {
           $empties.Add($label) | Out-Null
         } else {
           $successes.Add($label) | Out-Null
@@ -197,7 +211,7 @@ foreach ($item in $selected) {
         continue
       }
 
-      $hasWork = ($effectivePlan.Count -gt 0) -or $IncludeMcpMerge
+      $hasWork = ($effectivePlan.Count -gt 0) -or $mcpMergeable
       if (-not $hasWork) {
         Write-PropagationPlan -Label $label -ChildPath $childRoot -PlanInfo $plan0 -EffectivePlan @()
         Write-Host "Plan vacío: no se crea worktree/branch para $label."

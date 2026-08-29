@@ -254,9 +254,13 @@ Describe 'Git gate / empty plan / -All exit codes' {
   It 'SafeBranch y FolderName rechazan traversal' {
     { ConvertTo-HubPropagationSafeBranch -BranchName '..' } | Should -Throw
     { ConvertTo-HubPropagationSafeBranch -BranchName 'hub/../x' } | Should -Throw
+    { ConvertTo-HubPropagationSafeBranch -BranchName '--dry-run' } | Should -Throw
     { ConvertTo-HubPropagationRelativePath -Path '../secrets' } | Should -Throw
     { ConvertTo-HubPropagationRelativePath -Path './backlog.md' } | Should -Not -Throw
     (ConvertTo-HubPropagationRelativePath -Path './backlog.md') | Should -Be 'backlog.md'
+    # hub/x vs hub-x must not collide
+    (ConvertTo-HubPropagationSafeBranch -BranchName 'hub/propagate-x') |
+      Should -Not -Be (ConvertTo-HubPropagationSafeBranch -BranchName 'hub-propagate-x')
     {
       Get-HubPropagationWorktreePath -HubRoot $script:sandbox.Root -FolderName 'a/../../b' -SafeBranch 'ok'
     } | Should -Throw

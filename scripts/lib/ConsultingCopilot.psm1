@@ -1932,11 +1932,16 @@ function Get-HubProjectProfileFromRoot {
 
   if (Test-Path -LiteralPath $projectProfile) {
     $meta = Get-Content -LiteralPath $projectProfile -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($meta.stackProfile -eq 'gentle-ai-only') { return 'GentleAi' }
+    if (($meta.PSObject.Properties.Name -contains 'stackProfile') -and $meta.stackProfile -eq 'gentle-ai-only') {
+      return 'GentleAi'
+    }
   }
 
   if (Test-Path -LiteralPath $engagementMeta) {
     $meta = Get-Content -LiteralPath $engagementMeta -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($meta.PSObject.Properties.Name -notcontains 'stackProfile') {
+      return 'Unknown'
+    }
     switch ($meta.stackProfile) {
       'consulting-only' { return 'Consulting' }
       'consulting-ai' { return 'ConsultingAI' }
@@ -2663,8 +2668,10 @@ function Get-HubPropagationChildContext {
     if ($stackProfile -in @('ConsultingAI', 'GentleAi')) { $gentleScope = 'Global' } else { $gentleScope = 'None' }
   }
 
-  $includeStartia = Get-HubPropagationMetaBool -Meta $engagement -Name 'includeStartiaMcp' -Default $false
-  if (-not $includeStartia) {
+  $includeStartia = $false
+  if ($engagement -and ($engagement.PSObject.Properties.Name -contains 'includeStartiaMcp')) {
+    $includeStartia = [bool]$engagement.includeStartiaMcp
+  } else {
     $includeStartia = Get-HubPropagationMetaBool -Meta $projectProfile -Name 'includeStartiaMcp' -Default $false
   }
 
@@ -2791,7 +2798,7 @@ function New-HubPropagationStaging {
         corporateDocxTemplateName = $ctx.CorporateDocxTemplateName
         includeDrawioMcp = [bool]$ctx.IncludeDrawioMcp
         includeBacklogMcp = [bool]$ctx.IncludeBacklogMcp
-        includeArchiMcp = [bool]$ctx.IncludeArchiMcp
+        includeArchiMcp = [bool]$includeArchiForMcp
         includeClaudeCoworkLayer = [bool]$ctx.IncludeClaudeCoworkLayer
         includeStartiaMcp = [bool]$ctx.IncludeStartiaMcp
         gentleAiScope = $ctx.GentleAiScope.ToLowerInvariant()
@@ -2807,7 +2814,7 @@ function New-HubPropagationStaging {
         -GentleAiScope $gentleForGettingStarted `
         -IncludeDrawioMcp $ctx.IncludeDrawioMcp `
         -IncludeBacklogMcp $ctx.IncludeBacklogMcp `
-        -IncludeArchiMcp $ctx.IncludeArchiMcp `
+        -IncludeArchiMcp $includeArchiForMcp `
         -IncludeStartiaMcp $ctx.IncludeStartiaMcp `
         -CorporateDocxTemplateName $ctx.CorporateDocxTemplateName | Out-Null
     }
@@ -2846,7 +2853,7 @@ function Merge-HubPropagationMcpMissingKeys {
     return
   }
   $stagingConfig = Get-Content -LiteralPath $stagingMcp -Raw -Encoding UTF8 | ConvertFrom-Json
-  if (-not $stagingConfig.mcpServers) { return }
+  if (($stagingConfig.PSObject.Properties.Name -notcontains 'mcpServers') -or -not $stagingConfig.mcpServers) { return }
 
   $destCursor = Join-Path $DestinationPath '.cursor'
   if (-not (Test-Path -LiteralPath $destCursor)) {
@@ -2861,7 +2868,7 @@ function Merge-HubPropagationMcpMissingKeys {
       if ($prop.Name -eq 'mcpServers') { continue }
       $destRoot[$prop.Name] = $prop.Value
     }
-    if ($destConfig.mcpServers) {
+    if (($destConfig.PSObject.Properties.Name -contains 'mcpServers') -and $destConfig.mcpServers) {
       foreach ($prop in @($destConfig.mcpServers.PSObject.Properties)) {
         $destServers[$prop.Name] = $prop.Value
       }
@@ -2925,7 +2932,12 @@ function ConvertTo-HubPropagationSafeBranch {
   if ([string]::IsNullOrWhiteSpace($BranchName)) {
     throw 'BranchName vacío no es válido.'
   }
-  $safe = $BranchName.Trim().Replace('/', '-')
+  $trimmed = $BranchName.Trim()
+  if ($trimmed.StartsWith('-')) {
+    throw "BranchName no puede empezar con '-': $BranchName"
+  }
+  # Use '__' for '/' so hub/x and hub-x do not collide on the same worktree path.
+  $safe = $trimmed.Replace('/', '__')
   if ([string]::IsNullOrWhiteSpace($safe) -or $safe -notmatch '^[A-Za-z0-9._-]+$') {
     throw "BranchName inseguro tras sanitize (solo alfanumérico, '-', '_', '.'): $BranchName"
   }
