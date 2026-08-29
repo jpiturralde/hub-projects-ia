@@ -153,29 +153,38 @@ function Resolve-BacklogNpmPrefixBin {
   return Resolve-HubRootPath (Join-Path $prefix 'bin')
 }
 
+function Select-FirstUsableHubCommandPath {
+  param(
+    [Parameter(Mandatory = $true)][string] $Name,
+    [scriptblock] $VersionInvoker
+  )
+  $paths = @(Get-HubCommandExecutablePaths -Name $Name)
+  foreach ($candidate in $paths) {
+    if (Test-BacklogCliVersion -Path $candidate -Invoker $VersionInvoker) {
+      return $candidate
+    }
+  }
+  return $null
+}
+
 function Install-BacklogCli {
   param(
     [scriptblock] $NpmInvoker,
     [scriptblock] $VersionInvoker
   )
 
-  $nodePaths = @(Get-HubCommandExecutablePaths -Name 'node')
-  $npmPaths = @(Get-HubCommandExecutablePaths -Name 'npm')
+  # 5B: allow multi-hit node/npm; pick first usable (not Count -eq 1).
+  # VersionInvoker is for backlog --version only; node/npm use default --version probe.
+  $nodePath = Select-FirstUsableHubCommandPath -Name 'node'
+  $npmPath = Select-FirstUsableHubCommandPath -Name 'npm'
 
-  if ($nodePaths.Count -eq 0) {
-    throw "Node.js no está disponible en PATH (nativo de este SO). Instalá Node.js LTS y volvé a ejecutar. Luego: $(Get-BacklogManualInstallHint)"
+  if (-not $nodePath) {
+    throw "Node.js no está disponible/usable en PATH (nativo de este SO). Instalá Node.js LTS y volvé a ejecutar. Luego: $(Get-BacklogManualInstallHint)"
   }
-  if ($nodePaths.Count -gt 1) {
-    throw "Se detectaron varias instalaciones de node. Conservá una sola nativa en PATH:`n$($nodePaths -join "`n")"
-  }
-  if ($npmPaths.Count -eq 0) {
-    throw "npm no está disponible en PATH (nativo de este SO). Instalá Node.js LTS (incluye npm) y volvé a ejecutar. Luego: $(Get-BacklogManualInstallHint)"
-  }
-  if ($npmPaths.Count -gt 1) {
-    throw "Se detectaron varias instalaciones de npm. Conservá una sola nativa en PATH:`n$($npmPaths -join "`n")"
+  if (-not $npmPath) {
+    throw "npm no está disponible/usable en PATH (nativo de este SO). Instalá Node.js LTS (incluye npm) y volvé a ejecutar. Luego: $(Get-BacklogManualInstallHint)"
   }
 
-  $npmPath = $npmPaths[0]
   Write-Host "Instalando Backlog.md con npm nativo: $npmPath"
   Write-Host "Comando: npm install -g backlog.md@latest --include=optional"
 

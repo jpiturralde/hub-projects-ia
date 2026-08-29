@@ -15,9 +15,21 @@ pwsh -NoProfile -File .\Install-ConsultingCopilot.ps1 -StackProfile ConsultingAI
 cd /home/usuario/work/hub-projects-ia
 ./scripts/hub doctor -StackProfile ConsultingAI
 # equivalente: pwsh -File ./scripts/Install-ConsultingCopilot.ps1 ...
+./scripts/hub env projects/<nombre>   # entorno del hijo (detect-only)
 ```
 
 El diagnóstico es read-only (nombre histórico `Install-*`; no instala). Si hay varios ejecutables o global + workspace, corregir primero; el generador no toca archivos administrados.
+
+Para **retrofit** de `requires` (schema 4) + GETTING-STARTED + doctor en hijos ya registrados — **mismo writer** que `Refresh-ProjectGettingStarted.ps1` (no hay script de copy-in):
+
+```bash
+./scripts/hub refresh --all
+# o un hijo: ./scripts/hub refresh projects/<nombre>
+# manual fuera del registry:
+# pwsh -File ./scripts/Refresh-ProjectGettingStarted.ps1 -TargetPath /ruta/absoluta/hijo
+```
+
+Doctor de entorno (detect-only, mensajes en español): hijo `scripts/Test-ProjectEnvironment.ps1` o `./scripts/hub env projects/<nombre>`. Exit `2` si falla un tool required o el MCP local está `broken`.
 
 ## 2. Generar
 

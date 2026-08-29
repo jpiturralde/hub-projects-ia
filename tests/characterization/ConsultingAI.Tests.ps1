@@ -70,8 +70,13 @@ Describe 'Perfil ConsultingAI' {
     $meta.stackProfile | Should -Be 'consulting-ai'
     $meta.engramMcpSource | Should -Be 'gentle-ai-managed'
     $meta.requestedProfile | Should -Be 'ConsultingAI'
+    $meta.schemaVersion | Should -Be 4
+    $reqIds = @($meta.requires.tools | ForEach-Object { $_.id })
+    $reqIds | Should -Not -Contain 'engram'
+    @($meta.requires.tools | Where-Object { $_.level -eq 'absent' }).Count | Should -Be 0
     $servers = @(Get-McpServerNamesFromProject -ProjectRoot $target)
     $servers | Should -Not -Contain 'engram'
+    Test-Path (Join-Path $target 'scripts/Test-ProjectEnvironment.ps1') | Should -Be $true
   }
 
   It 'instala Gentle AI global cuando se elige Global sin configuración previa' {
