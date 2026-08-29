@@ -2464,6 +2464,559 @@ function Write-HubRegistry {
   HubRegistry\Write-HubRegistry -RegistryPath $RegistryPath -Document $Document
 }
 
+# --- Hub template propagation (allowlist / staging / sync) ---
+
+$script:HubPropagationDenylistExact = @(
+  'docs/architecture-gaps-and-questions.md',
+  'backlog.md'
+)
+
+$script:HubPropagationDenylistPrefixes = @(
+  'transcripts/',
+  'docs/draft/',
+  'docs/deliverables/',
+  'docs/client-documentation/',
+  '.cdd/changes/',
+  'backlog/',
+  '.git/'
+)
+
+$script:HubPropagationHybridExact = @(
+  '.cursor/mcp.json',
+  'README.md',
+  'SPEC.md',
+  'ARCHITECTURE.md',
+  'PROJECT-CONTEXT.md',
+  '.consulting-engagement.json',
+  '.project-profile.json',
+  '.atl/stack-profile.json',
+  '.gitignore',
+  '.cursorignore'
+)
+
+function ConvertTo-HubPropagationRelativePath {
+  param([Parameter(Mandatory = $true)][string] $Path)
+  return (($Path -replace '\\', '/').TrimStart('/'))
+}
+
+function Test-HubPropagationDeniedPath {
+  param([Parameter(Mandatory = $true)][string] $RelativePath)
+  $normalized = ConvertTo-HubPropagationRelativePath -Path $RelativePath
+  if ($script:HubPropagationDenylistExact -contains $normalized) { return $true }
+  foreach ($prefix in $script:HubPropagationDenylistPrefixes) {
+    if ($normalized.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+  }
+  return $false
+}
+
+function Test-HubPropagationHybridPath {
+  param([Parameter(Mandatory = $true)][string] $RelativePath)
+  $normalized = ConvertTo-HubPropagationRelativePath -Path $RelativePath
+  return ($script:HubPropagationHybridExact -contains $normalized)
+}
+
+function Test-HubPropagationArchimateDiagramPath {
+  param([Parameter(Mandatory = $true)][string] $RelativePath)
+  $normalized = ConvertTo-HubPropagationRelativePath -Path $RelativePath
+  return ($normalized -match '^docs/diagrams/archimate-.*\.(xml|drawio)$')
+}
+
+function Resolve-HubPropagationGoldenName {
+  param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Consulting', 'ConsultingAI', 'GentleAi', 'Full')]
+    [string] $StackProfile
+  )
+  switch ($StackProfile) {
+    'Full' { return 'consulting-ai' }
+    'ConsultingAI' { return 'consulting-ai' }
+    'Consulting' { return 'consulting' }
+    'GentleAi' { return 'gentle-ai' }
+    default { throw "StackProfile no soportado para golden: $StackProfile" }
+  }
+}
+
+function Get-HubPropagatablePaths {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Consulting', 'ConsultingAI', 'GentleAi', 'Full')]
+    [string] $StackProfile
+  )
+  $hub = Resolve-HubRootPath $HubRoot
+  $goldenName = Resolve-HubPropagationGoldenName -StackProfile $StackProfile
+  $manifestPath = Join-HubPath $hub 'tests' 'expected' $goldenName 'manifest.json'
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "Golden manifest no encontrado: $manifestPath"
+  }
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $allow = [System.Collections.Generic.List[string]]::new()
+  foreach ($entry in @($manifest.files)) {
+    $relative = ConvertTo-HubPropagationRelativePath -Path ([string]$entry)
+    if (-not [string]::IsNullOrWhiteSpace($relative)) { $allow.Add($relative) | Out-Null }
+  }
+
+  $deny = [System.Collections.Generic.List[string]]::new()
+  $hybrid = [System.Collections.Generic.List[string]]::new()
+  $archimate = [System.Collections.Generic.List[string]]::new()
+  $plan = [System.Collections.Generic.List[string]]::new()
+
+  foreach ($relative in $allow) {
+    if (Test-HubPropagationDeniedPath -RelativePath $relative) {
+      $deny.Add($relative) | Out-Null
+      continue
+    }
+    if (Test-HubPropagationHybridPath -RelativePath $relative) {
+      $hybrid.Add($relative) | Out-Null
+      continue
+    }
+    if (Test-HubPropagationArchimateDiagramPath -RelativePath $relative) {
+      $archimate.Add($relative) | Out-Null
+      continue
+    }
+    $plan.Add($relative) | Out-Null
+  }
+
+  return [pscustomobject]@{
+    StackProfile = $StackProfile
+    GoldenName = $goldenName
+    ManifestPath = $manifestPath
+    Allow = @($allow)
+    Deny = @($deny)
+    Hybrid = @($hybrid)
+    ArchimateDiagrams = @($archimate)
+    Plan = @($plan)
+  }
+}
+
+function Get-HubPropagationMetaProperty {
+  param($Meta, [string] $Name, $Default = $null)
+  if ($null -eq $Meta) { return $Default }
+  if ($Meta.PSObject.Properties.Name -notcontains $Name) { return $Default }
+  $value = $Meta.$Name
+  if ($null -eq $value) { return $Default }
+  if (($value -is [string]) -and [string]::IsNullOrWhiteSpace($value)) { return $Default }
+  return $value
+}
+
+function Get-HubPropagationMetaBool {
+  param($Meta, [string] $Name, [bool] $Default = $false)
+  if ($null -eq $Meta) { return $Default }
+  if ($Meta.PSObject.Properties.Name -notcontains $Name) { return $Default }
+  return [bool]$Meta.$Name
+}
+
+function Get-HubPropagationChildContext {
+  param([Parameter(Mandatory = $true)][string] $ChildRoot)
+  $ChildRoot = Resolve-HubRootPath $ChildRoot
+  $folderSlug = ConvertTo-ConsultingSlug (Split-Path -Leaf $ChildRoot)
+  if ([string]::IsNullOrWhiteSpace($folderSlug)) { $folderSlug = 'project' }
+
+  $engagementPath = Join-Path $ChildRoot '.consulting-engagement.json'
+  $profilePath = Join-Path $ChildRoot '.project-profile.json'
+  $engagement = $null
+  $projectProfile = $null
+  if (Test-Path -LiteralPath $engagementPath -PathType Leaf) {
+    $engagement = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
+    $projectProfile = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+
+  $stackProfile = Get-HubProjectProfileFromRoot -Root $ChildRoot
+  if ($stackProfile -eq 'Unknown') {
+    throw "No se pudo resolver el perfil del hijo: $ChildRoot"
+  }
+  if ($stackProfile -eq 'Full') { $stackProfile = 'ConsultingAI' }
+
+  $clientSlug = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'clientSlug' -Default $folderSlug)
+  $clientDisplayName = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'clientDisplayName' -Default $clientSlug)
+  $initiativeDisplayName = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'initiativeDisplayName' -Default 'Initiative')
+  $initiativeId = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'initiativeId' -Default 'U01')
+  $consultancyName = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'consultancyName' -Default 'Ingenia')
+  $partnerTeamName = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'partnerTeamName' -Default '')
+  $corporateDocx = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'corporateDocxTemplateName' -Default 'Plantilla Ingenia - 2025.docx')
+  $archimateExport = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'archimateExportFilename' -Default ("archimate-$clientSlug-model.xml"))
+  $archimateViews = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'archimateViewsFilename' -Default ("archimate-$clientSlug-views.drawio"))
+  $docTitlePrefix = [string](Get-HubPropagationMetaProperty -Meta $engagement -Name 'docTitlePrefix' -Default ("$clientDisplayName - $initiativeDisplayName"))
+  $projectName = [string](Get-HubPropagationMetaProperty -Meta $projectProfile -Name 'projectName' -Default (Split-Path -Leaf $ChildRoot))
+
+  $gentleScopeRaw = Get-HubPropagationMetaProperty -Meta $engagement -Name 'gentleAiScope' -Default $null
+  if ($null -eq $gentleScopeRaw) {
+    $gentleScopeRaw = Get-HubPropagationMetaProperty -Meta $projectProfile -Name 'gentleAiScope' -Default 'global'
+  }
+  $gentleScope = ([string]$gentleScopeRaw).Trim()
+  if ([string]::IsNullOrWhiteSpace($gentleScope)) { $gentleScope = 'global' }
+  $gentleScope = $gentleScope.Substring(0, 1).ToUpperInvariant() + $gentleScope.Substring(1).ToLowerInvariant()
+  if ($gentleScope -notin @('None', 'Global', 'Workspace', 'Existing')) {
+    if ($stackProfile -in @('ConsultingAI', 'GentleAi')) { $gentleScope = 'Global' } else { $gentleScope = 'None' }
+  }
+
+  $includeStartia = Get-HubPropagationMetaBool -Meta $engagement -Name 'includeStartiaMcp' -Default $false
+  if (-not $includeStartia) {
+    $includeStartia = Get-HubPropagationMetaBool -Meta $projectProfile -Name 'includeStartiaMcp' -Default $false
+  }
+
+  $archiArgs = @()
+  $mcpPath = Join-Path $ChildRoot '.cursor' 'mcp.json'
+  if (Test-Path -LiteralPath $mcpPath -PathType Leaf) {
+    try {
+      $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      if ($mcp.mcpServers -and $mcp.mcpServers.PSObject.Properties.Name -contains 'archi') {
+        $archiServer = $mcp.mcpServers.archi
+        if ($archiServer.PSObject.Properties.Name -contains 'args' -and $archiServer.args) {
+          $archiArgs = @($archiServer.args | ForEach-Object { [string]$_ })
+        }
+      }
+    } catch {
+      $archiArgs = @()
+    }
+  }
+
+  return [pscustomobject]@{
+    ChildRoot = $ChildRoot
+    StackProfile = $stackProfile
+    ClientDisplayName = $clientDisplayName
+    ClientSlug = $clientSlug
+    InitiativeDisplayName = $initiativeDisplayName
+    InitiativeId = $initiativeId
+    ConsultancyName = $consultancyName
+    PartnerTeamName = $partnerTeamName
+    CorporateDocxTemplateName = $corporateDocx
+    ArchimateExportFilename = $archimateExport
+    ArchimateViewsFilename = $archimateViews
+    DocTitlePrefix = $docTitlePrefix
+    ProjectName = $projectName
+    GentleAiScope = $gentleScope
+    IncludeDrawioMcp = (Get-HubPropagationMetaBool -Meta $engagement -Name 'includeDrawioMcp' -Default $true)
+    IncludeBacklogMcp = (Get-HubPropagationMetaBool -Meta $engagement -Name 'includeBacklogMcp' -Default $false)
+    IncludeArchiMcp = (Get-HubPropagationMetaBool -Meta $engagement -Name 'includeArchiMcp' -Default $false)
+    IncludeClaudeCoworkLayer = (Get-HubPropagationMetaBool -Meta $engagement -Name 'includeClaudeCoworkLayer' -Default $false)
+    IncludeStartiaMcp = $includeStartia
+    ArchiMcpArgs = $archiArgs
+  }
+}
+
+function New-HubPropagationStaging {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $ChildRoot
+  )
+  $hub = Resolve-HubRootPath $HubRoot
+  $ctx = Get-HubPropagationChildContext -ChildRoot $ChildRoot
+  $stagingPath = New-ConsultingProjectStagingPath
+
+  $skeletonPath = Join-HubPath $hub 'skeleton'
+  $skeletonMinimalPath = Join-HubPath $hub 'skeleton-minimal'
+  $overlayConsultingPath = Join-HubPath $hub 'overlays' 'consulting'
+  $overlayFullPath = Join-HubPath $hub 'overlays' 'full'
+
+  try {
+    if ($ctx.StackProfile -eq 'GentleAi') {
+      Copy-ConsultingSkeleton -SourcePath $skeletonMinimalPath -TargetPath $stagingPath
+      Copy-ProjectOnboardingLayer -SourceRoot $hub -TargetPath $stagingPath
+      if ($ctx.IncludeStartiaMcp) {
+        Copy-StartiaMcpPolicy -SourceRoot $hub -TargetPath $stagingPath
+        $mcp = Get-ConsultingMcpServers `
+          -IncludeDrawioMcp $false -IncludeBacklogMcp $false -BacklogMcpCwd '' `
+          -IncludeArchiMcp $false -ArchiMcpArgs @() -IncludeStartiaMcp $true
+        Write-ConsultingMcpJson -TargetPath $stagingPath -McpServers $mcp
+      }
+      Invoke-ConsultingTokenReplacement -TargetPath $stagingPath -Replacements ([ordered]@{ '{{PROJECT_NAME}}' = $ctx.ProjectName })
+      Test-ConsultingPlaceholders -TargetPath $stagingPath
+      Write-ProjectProfile -TargetPath $stagingPath -ProjectName $ctx.ProjectName -GentleAiScope $ctx.GentleAiScope -IncludeStartiaMcp $ctx.IncludeStartiaMcp
+      Write-ProjectGettingStarted `
+        -TargetPath $stagingPath -StackProfile GentleAi -Title $ctx.ProjectName -GentleAiScope $ctx.GentleAiScope `
+        -IncludeStartiaMcp $ctx.IncludeStartiaMcp | Out-Null
+    } else {
+      Copy-ConsultingSkeleton -SourcePath $skeletonPath -TargetPath $stagingPath
+      Copy-ProjectOverlay -OverlayPath $overlayConsultingPath -TargetPath $stagingPath
+      if ($ctx.StackProfile -eq 'ConsultingAI') {
+        Copy-ProjectOverlay -OverlayPath $overlayFullPath -TargetPath $stagingPath
+      }
+      Rename-ConsultingArchimateTemplates `
+        -TargetPath $stagingPath `
+        -ArchimateExportFilename $ctx.ArchimateExportFilename `
+        -ArchimateViewsFilename $ctx.ArchimateViewsFilename
+      $replacements = Get-ConsultingTokenReplacements `
+        -ClientDisplayName $ctx.ClientDisplayName -ClientSlug $ctx.ClientSlug `
+        -InitiativeDisplayName $ctx.InitiativeDisplayName -InitiativeId $ctx.InitiativeId `
+        -ConsultancyName $ctx.ConsultancyName -PartnerTeamName $ctx.PartnerTeamName `
+        -DocTitlePrefix $ctx.DocTitlePrefix `
+        -ArchimateExportFilename $ctx.ArchimateExportFilename `
+        -ArchimateViewsFilename $ctx.ArchimateViewsFilename `
+        -CorporateDocxTemplateName $ctx.CorporateDocxTemplateName
+      Invoke-ConsultingTokenReplacement -TargetPath $stagingPath -Replacements $replacements
+      if (-not $ctx.IncludeClaudeCoworkLayer) {
+        Remove-ConsultingClaudeLayer -TargetPath $stagingPath
+      }
+      if ($ctx.IncludeStartiaMcp) {
+        Copy-StartiaMcpPolicy -SourceRoot $hub -TargetPath $stagingPath
+      }
+      $archiArgs = @($ctx.ArchiMcpArgs)
+      if ($ctx.IncludeArchiMcp -and $archiArgs.Count -eq 0) {
+        # Keep flag but avoid throwing on missing archi path during re-stage.
+        $archiArgs = @('/dev/null')
+      }
+      $mcp = Get-ConsultingMcpServers `
+        -IncludeDrawioMcp $ctx.IncludeDrawioMcp `
+        -IncludeBacklogMcp $ctx.IncludeBacklogMcp -BacklogMcpCwd $ctx.ChildRoot `
+        -IncludeArchiMcp $ctx.IncludeArchiMcp -ArchiMcpArgs $archiArgs `
+        -IncludeStartiaMcp $ctx.IncludeStartiaMcp
+      Write-ConsultingMcpJson -TargetPath $stagingPath -McpServers $mcp
+      $stackProfileValue = if ($ctx.StackProfile -eq 'ConsultingAI') { 'consulting-ai' } else { 'consulting-only' }
+      Write-StackProfileConfig -TargetPath $stagingPath -StackProfileValue $stackProfileValue
+      $metaFields = [ordered]@{
+        clientDisplayName = $ctx.ClientDisplayName
+        clientSlug = $ctx.ClientSlug
+        initiativeDisplayName = $ctx.InitiativeDisplayName
+        initiativeId = $ctx.InitiativeId
+        consultancyName = $ctx.ConsultancyName
+        docTitlePrefix = $ctx.DocTitlePrefix
+        archimateExportFilename = $ctx.ArchimateExportFilename
+        archimateViewsFilename = $ctx.ArchimateViewsFilename
+        corporateDocxTemplateName = $ctx.CorporateDocxTemplateName
+        includeDrawioMcp = [bool]$ctx.IncludeDrawioMcp
+        includeBacklogMcp = [bool]$ctx.IncludeBacklogMcp
+        includeArchiMcp = [bool]$ctx.IncludeArchiMcp
+        includeClaudeCoworkLayer = [bool]$ctx.IncludeClaudeCoworkLayer
+        includeStartiaMcp = [bool]$ctx.IncludeStartiaMcp
+        gentleAiScope = $ctx.GentleAiScope.ToLowerInvariant()
+      }
+      if (-not [string]::IsNullOrWhiteSpace($ctx.PartnerTeamName)) {
+        $metaFields['partnerTeamName'] = $ctx.PartnerTeamName
+      }
+      Write-EngagementMetadata -TargetPath $stagingPath -StackProfileValue $stackProfileValue -Fields $metaFields
+      Test-ConsultingPlaceholders -TargetPath $stagingPath
+      $gentleForGettingStarted = if ($ctx.StackProfile -eq 'ConsultingAI') { $ctx.GentleAiScope } else { 'None' }
+      Write-ProjectGettingStarted `
+        -TargetPath $stagingPath -StackProfile $ctx.StackProfile -Title $ctx.DocTitlePrefix `
+        -GentleAiScope $gentleForGettingStarted `
+        -IncludeDrawioMcp $ctx.IncludeDrawioMcp `
+        -IncludeBacklogMcp $ctx.IncludeBacklogMcp `
+        -IncludeArchiMcp $ctx.IncludeArchiMcp `
+        -IncludeStartiaMcp $ctx.IncludeStartiaMcp `
+        -CorporateDocxTemplateName $ctx.CorporateDocxTemplateName | Out-Null
+    }
+  } catch {
+    Remove-ConsultingProjectStaging -StagingPath $stagingPath
+    throw
+  }
+
+  return $stagingPath
+}
+
+function Select-HubPropagationPlanPresentInStaging {
+  param(
+    [Parameter(Mandatory = $true)][string] $StagingPath,
+    [Parameter(Mandatory = $true)][string[]] $Plan
+  )
+  $present = [System.Collections.Generic.List[string]]::new()
+  foreach ($relative in @($Plan)) {
+    $normalized = ConvertTo-HubPropagationRelativePath -Path $relative
+    $candidate = Join-Path $StagingPath ($normalized -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      $present.Add($normalized) | Out-Null
+    }
+  }
+  return @($present)
+}
+
+function Merge-HubPropagationMcpMissingKeys {
+  param(
+    [Parameter(Mandatory = $true)][string] $StagingPath,
+    [Parameter(Mandatory = $true)][string] $DestinationPath
+  )
+  $stagingMcp = Join-Path $StagingPath '.cursor' 'mcp.json'
+  if (-not (Test-Path -LiteralPath $stagingMcp -PathType Leaf)) {
+    Write-Warning "IncludeMcpMerge: staging mcp.json ausente; no hay claves para fusionar."
+    return
+  }
+  $stagingConfig = Get-Content -LiteralPath $stagingMcp -Raw -Encoding UTF8 | ConvertFrom-Json
+  if (-not $stagingConfig.mcpServers) { return }
+
+  $destCursor = Join-Path $DestinationPath '.cursor'
+  if (-not (Test-Path -LiteralPath $destCursor)) {
+    New-Item -ItemType Directory -Path $destCursor -Force | Out-Null
+  }
+  $destMcp = Join-Path $destCursor 'mcp.json'
+  $destServers = [ordered]@{}
+  if (Test-Path -LiteralPath $destMcp -PathType Leaf) {
+    $destConfig = Get-Content -LiteralPath $destMcp -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($destConfig.mcpServers) {
+      foreach ($prop in @($destConfig.mcpServers.PSObject.Properties)) {
+        $destServers[$prop.Name] = $prop.Value
+      }
+    }
+  }
+
+  $added = 0
+  foreach ($prop in @($stagingConfig.mcpServers.PSObject.Properties)) {
+    if ($destServers.Contains($prop.Name)) { continue }
+    $destServers[$prop.Name] = $prop.Value
+    $added++
+  }
+  if ($added -eq 0) { return }
+  $json = @{ mcpServers = $destServers } | ConvertTo-Json -Depth 10
+  [System.IO.File]::WriteAllText($destMcp, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+}
+
+function Sync-HubTemplatePaths {
+  param(
+    [Parameter(Mandatory = $true)][string] $StagingPath,
+    [Parameter(Mandatory = $true)][string] $DestinationPath,
+    [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]] $Plan,
+    [switch] $IncludeMcpMerge
+  )
+  if (-not (Test-Path -LiteralPath $StagingPath -PathType Container)) {
+    throw "Staging inválido: $StagingPath"
+  }
+  if (-not (Test-Path -LiteralPath $DestinationPath -PathType Container)) {
+    throw "Destino inválido: $DestinationPath"
+  }
+
+  foreach ($relative in @($Plan)) {
+    $normalized = ConvertTo-HubPropagationRelativePath -Path $relative
+    if ([string]::IsNullOrWhiteSpace($normalized)) { continue }
+    if (Test-HubPropagationDeniedPath -RelativePath $normalized) {
+      throw "Sync rechazó path denylist: $normalized"
+    }
+    if ($normalized.StartsWith('.git/', [StringComparison]::OrdinalIgnoreCase) -or $normalized -eq '.git') {
+      throw "Sync rechazó write bajo .git/: $normalized"
+    }
+    $source = Join-Path $StagingPath ($normalized -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+      throw "Path del plan ausente en staging: $normalized"
+    }
+    $dest = Join-Path $DestinationPath ($normalized -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    $parent = Split-Path -Parent $dest
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+      New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    Copy-Item -LiteralPath $source -Destination $dest -Force
+  }
+
+  if ($IncludeMcpMerge) {
+    Merge-HubPropagationMcpMissingKeys -StagingPath $StagingPath -DestinationPath $DestinationPath
+  }
+}
+
+function ConvertTo-HubPropagationSafeBranch {
+  param([Parameter(Mandatory = $true)][string] $BranchName)
+  if ([string]::IsNullOrWhiteSpace($BranchName)) {
+    throw 'BranchName vacío no es válido.'
+  }
+  $safe = $BranchName.Trim().Replace('/', '-')
+  if ([string]::IsNullOrWhiteSpace($safe) -or $safe -notmatch '^[A-Za-z0-9._-]+$') {
+    throw "BranchName inseguro tras sanitize (solo alfanumérico, '-', '_', '.'): $BranchName"
+  }
+  return $safe
+}
+
+function Test-HubChildGitUsable {
+  param([Parameter(Mandatory = $true)][string] $ChildRoot)
+  if (-not (Test-Path -LiteralPath $ChildRoot -PathType Container)) { return $false }
+  $gitMarker = Join-Path $ChildRoot '.git'
+  if (-not (Test-Path -LiteralPath $gitMarker)) { return $false }
+  & git -C $ChildRoot rev-parse --is-inside-work-tree 1>$null 2>$null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Get-HubPropagationWorktreePath {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $FolderName,
+    [Parameter(Mandatory = $true)][string] $SafeBranch
+  )
+  return (Join-HubPath (Resolve-HubRootPath $HubRoot) '.hub-propagate-worktrees' $FolderName $SafeBranch)
+}
+
+function Test-HubPropagationBranchExists {
+  param(
+    [Parameter(Mandatory = $true)][string] $ChildRoot,
+    [Parameter(Mandatory = $true)][string] $BranchName
+  )
+  & git -C $ChildRoot show-ref --verify --quiet "refs/heads/$BranchName" 1>$null 2>$null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Get-HubPropagationWorktreeBranch {
+  param([Parameter(Mandatory = $true)][string] $WorktreePath)
+  if (-not (Test-Path -LiteralPath $WorktreePath -PathType Container)) { return $null }
+  $name = & git -C $WorktreePath rev-parse --abbrev-ref HEAD 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  return ([string]$name).Trim()
+}
+
+function Ensure-HubPropagationWorktree {
+  param(
+    [Parameter(Mandatory = $true)][string] $HubRoot,
+    [Parameter(Mandatory = $true)][string] $ChildRoot,
+    [Parameter(Mandatory = $true)][string] $FolderName,
+    [Parameter(Mandatory = $true)][string] $BranchName
+  )
+  $safeBranch = ConvertTo-HubPropagationSafeBranch -BranchName $BranchName
+  $worktreePath = Get-HubPropagationWorktreePath -HubRoot $HubRoot -FolderName $FolderName -SafeBranch $safeBranch
+  $parent = Split-Path -Parent $worktreePath
+  if (-not (Test-Path -LiteralPath $parent)) {
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  }
+
+  if (Test-Path -LiteralPath $worktreePath) {
+    $existingBranch = Get-HubPropagationWorktreeBranch -WorktreePath $worktreePath
+    if ($existingBranch -eq $BranchName) {
+      return [pscustomobject]@{
+        WorktreePath = $worktreePath
+        BranchName = $BranchName
+        SafeBranch = $safeBranch
+        Reused = $true
+      }
+    }
+    throw "Worktree path existe pero no pertenece a branch '$BranchName' (HEAD='$existingBranch'): $worktreePath"
+  }
+
+  if (Test-HubPropagationBranchExists -ChildRoot $ChildRoot -BranchName $BranchName) {
+    throw @"
+Branch '$BranchName' existe sin worktree en '$worktreePath'.
+Cleanup sugerido:
+  git -C `"$ChildRoot`" worktree remove `"$worktreePath`"
+  git -C `"$ChildRoot`" branch -D `"$BranchName`"
+"@
+  }
+
+  & git -C $ChildRoot worktree add -b $BranchName $worktreePath 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "git worktree add falló para branch '$BranchName' en $worktreePath (exit $LASTEXITCODE)"
+  }
+
+  return [pscustomobject]@{
+    WorktreePath = $worktreePath
+    BranchName = $BranchName
+    SafeBranch = $safeBranch
+    Reused = $false
+  }
+}
+
+function Test-HubPropagationProfileMatch {
+  param(
+    [Parameter(Mandatory = $true)][string] $RegistryProfile,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Consulting', 'ConsultingAI', 'GentleAi', 'Full')]
+    [string] $FilterProfile
+  )
+  $normalized = switch ($RegistryProfile.Trim()) {
+    'consulting-ai' { 'ConsultingAI' }
+    'consulting-only' { 'Consulting' }
+    'gentle-ai-only' { 'GentleAi' }
+    'full' { 'Full' }
+    default { $RegistryProfile.Trim() }
+  }
+  if ($FilterProfile -in @('ConsultingAI', 'Full')) {
+    return ($normalized -in @('ConsultingAI', 'Full'))
+  }
+  return ($normalized -eq $FilterProfile)
+}
+
 Export-ModuleMember -Function @(
   'Get-ConsultingUserHome', 'Get-HubProjectsIaRoot',
   'ConvertTo-ConsultingSlug', 'Read-ConsultingPrompt', 'Read-ConsultingPromptYesNo', 'Read-ConsultingChoice',
@@ -2498,5 +3051,11 @@ Export-ModuleMember -Function @(
   'Get-ConsultingCopilotPreflightDiagnostic', 'Write-ConsultingCopilotPreflightDiagnostic',
   'Get-HubPlatformInfo', 'Assert-HubWindowsNativeHost', 'Join-HubPath', 'Compare-HubPath', 'Resolve-HubModulePath',
   'Test-HubPathUnderWindowsMount', 'Test-HubArchiMcpPath', 'Test-HubMcpConfigurationPaths',
-  'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths'
+  'Write-HubPathLocationWarnings', 'Get-HubCommandExecutablePaths',
+  'Get-HubPropagatablePaths', 'New-HubPropagationStaging', 'Sync-HubTemplatePaths',
+  'Select-HubPropagationPlanPresentInStaging', 'ConvertTo-HubPropagationSafeBranch',
+  'Test-HubChildGitUsable', 'Get-HubPropagationWorktreePath', 'Ensure-HubPropagationWorktree',
+  'Test-HubPropagationProfileMatch', 'Get-HubPropagationChildContext', 'Get-HubProjectProfileFromRoot',
+  'Test-HubPropagationDeniedPath', 'Test-HubPropagationHybridPath', 'Test-HubPropagationArchimateDiagramPath',
+  'Resolve-HubPropagationGoldenName', 'Merge-HubPropagationMcpMissingKeys'
 )

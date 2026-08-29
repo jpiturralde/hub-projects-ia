@@ -2,6 +2,9 @@
 projects/*
 !projects/.gitkeep
 
+# Worktrees hub-side usados por Propagate-HubTemplateToChildren
+.hub-propagate-worktrees/
+
 # Mantener exclusiones operativas del entorno local si aplica
 .cursor/projects/
 hub-registry.json.bak-*

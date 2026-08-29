@@ -33,6 +33,8 @@ Los hijos se generan en `projects/` (gitignored en el padre). Cada hijo recibe s
 
 Mejoras al molde van en `skeleton/`, `skeleton-minimal/` y `overlays/` **en este repo**. No hay sync automático a hijos ya generados.
 
+Para actualizar hijos existentes de forma opt-in: `hub propagate` / `Propagate-HubTemplateToChildren.ps1` (DryRun = plan only; Apply = worktree hub-side bajo `.hub-propagate-worktrees/`; gate `.git` usable; Full↔ConsultingAI co-incluidos). Ver `HUB-WORKFLOW.md` § 9.
+
 ## Startia MCP vs forks del skeleton
 
 - Catálogo Ingenia approved → **Startia MCP** (`list_skills` / `get_skill`).

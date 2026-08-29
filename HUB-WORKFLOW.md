@@ -113,3 +113,29 @@ Checklist al actualizar contenido genérico:
 4. No reinstalar estos skills en `~/.cursor/skills`.
 
 Detalle: `skeleton/docs/MCP-PREREQUISITOS.md` § 5 y rule `startia-skill-wrappers.mdc`.
+
+## 9. Propagar plantilla a hijos (opt-in)
+
+La propagación de la capa plantilla del hub hacia proyectos ya generados es **solo opt-in** vía CLI. **No** hay auto-sync en generación, CI ni hooks.
+
+```bash
+# Ubuntu / WSL — plan only (sin worktree ni writes)
+./scripts/hub propagate --all --dry-run
+./scripts/hub propagate iplan-prev-2142 --dry-run
+
+# Apply: escribe solo en worktree/branch hub-side (.hub-propagate-worktrees/), nunca en el checkout live
+./scripts/hub propagate iplan-prev-2142 --branch hub/propagate-yyyyMMdd
+./scripts/hub propagate --profile ConsultingAI --include-mcp-merge
+```
+
+```powershell
+pwsh -NoProfile -File .\Propagate-HubTemplateToChildren.ps1 -All -DryRun
+pwsh -NoProfile -File .\Propagate-HubTemplateToChildren.ps1 -FolderName iplan-prev-2142
+```
+
+Contratos v1:
+
+- **DryRun** = plan de paths (`Get-HubPropagatablePaths`); sin worktree, sin `Sync-HubTemplatePaths`.
+- **Apply** = worktree hub-side únicamente; gate `.git` usable (`rev-parse`), no solo el flag registry `gitInitialized`.
+- Selección registry v2: `-FolderName` / `-All` / `-StackProfile`. **Full ↔ ConsultingAI** se co-incluyen (mismo golden `consulting-ai`).
+- Engagement (transcripts, drafts, gaps, backlog, `.cdd/changes`) y hybrid (mcp/README/stack-profile/…) no se sobrescriben por defecto.

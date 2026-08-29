@@ -19,6 +19,7 @@ Comandos:
   test <ruta> [args...]         Smoke read-only del hijo (Test-HubProject.ps1)
   env <ruta> [args...]          Diagnóstico de entorno del hijo (Test-HubChildEnvironment.ps1)
   refresh [ruta|--all] [args...]  Regenera GETTING-STARTED (Refresh-ProjectGettingStarted.ps1)
+  propagate [FolderName|--all] [opts...]  Propaga plantilla allowlist a hijos (opt-in; worktree)
   help, -h, --help              Esta ayuda
 
 Ejemplos:
@@ -30,6 +31,9 @@ Ejemplos:
   ./scripts/hub env projects/iplan-prev-2142
   ./scripts/hub refresh projects/iplan-prev-2142
   ./scripts/hub refresh --all
+  ./scripts/hub propagate --all --dry-run
+  ./scripts/hub propagate iplan-prev-2142 --branch hub/propagate-demo
+  ./scripts/hub propagate --profile ConsultingAI --include-mcp-merge
 
 Requisito: PowerShell 7 Linux (`pwsh`) en PATH (no el ejecutable Windows vía /mnt).
 EOF
@@ -150,6 +154,65 @@ Ejemplo: ./scripts/hub env projects/iplan-prev-2142 -AsJson"
         shift
         invoke_pwsh "Refresh-ProjectGettingStarted.ps1" -TargetPath "${target}" "$@"
       fi
+      ;;
+    propagate)
+      # Registry selection (FolderName / --all / --profile), NOT path→TargetPath like refresh.
+      local ps_args=()
+      local saw_folder=0
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --all|-All)
+            ps_args+=(-All)
+            shift
+            ;;
+          --profile|-StackProfile)
+            if [[ $# -lt 2 ]]; then
+              die 1 "Uso: ./scripts/hub propagate --profile <Consulting|ConsultingAI|GentleAi|Full>"
+            fi
+            ps_args+=(-StackProfile "$2")
+            shift 2
+            ;;
+          --dry-run|-DryRun)
+            ps_args+=(-DryRun)
+            shift
+            ;;
+          --include-mcp-merge|-IncludeMcpMerge)
+            ps_args+=(-IncludeMcpMerge)
+            shift
+            ;;
+          --branch|-BranchName)
+            if [[ $# -lt 2 ]]; then
+              die 1 "Uso: ./scripts/hub propagate --branch <BranchName>"
+            fi
+            ps_args+=(-BranchName "$2")
+            shift 2
+            ;;
+          -FolderName)
+            if [[ $# -lt 2 ]]; then
+              die 1 "Uso: ./scripts/hub propagate -FolderName <name>"
+            fi
+            ps_args+=(-FolderName "$2")
+            saw_folder=1
+            shift 2
+            ;;
+          -*)
+            die 1 "Opción desconocida para propagate: $1
+Opciones: --all | <FolderName> | --profile X | --dry-run | --include-mcp-merge | --branch name"
+            ;;
+          *)
+            if [[ "${saw_folder}" -eq 1 ]]; then
+              die 1 "FolderName duplicado o argumento inesperado: $1"
+            fi
+            ps_args+=(-FolderName "$1")
+            saw_folder=1
+            shift
+            ;;
+        esac
+      done
+      if [[ ${#ps_args[@]} -eq 0 ]]; then
+        die 1 "Uso: ./scripts/hub propagate <FolderName|--all|--profile X> [--dry-run] [--include-mcp-merge] [--branch name]"
+      fi
+      invoke_pwsh "Propagate-HubTemplateToChildren.ps1" "${ps_args[@]}"
       ;;
     *)
       die 1 "Comando desconocido: ${cmd}
