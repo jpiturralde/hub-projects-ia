@@ -13,17 +13,27 @@
     ".project-profile.json",
     "docs/GETTING-STARTED.md",
     "PROJECT-CONTEXT.md",
-    "README.md"
+    "README.md",
+    "scripts/Test-ProjectEnvironment.ps1"
   ],
   "mcpServers": [
     "startia"
   ],
   "metadata": {
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "stackProfile": "gentle-ai-only",
     "projectName": "equiv-app",
     "gentleAiScope": "global",
-    "includeStartiaMcp": true
+    "includeStartiaMcp": true,
+    "requires": {
+      "version": 1,
+      "tools": [
+        {
+          "id": "gentle-ai",
+          "level": "required"
+        }
+      ]
+    }
   },
   "gentleAiMarkers": {
     "workspaceGentleAiRule": false,

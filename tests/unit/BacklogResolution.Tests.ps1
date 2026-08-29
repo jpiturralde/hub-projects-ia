@@ -151,6 +151,10 @@ Describe 'Install-BacklogCli' {
     Import-Module $script:backlogModule -Force
   }
 
+  BeforeEach {
+    Mock Test-BacklogCliVersion { $true } -ModuleName Backlog
+  }
+
   It 'falla con mensaje accionable si npm no está' {
     Mock Get-HubCommandExecutablePaths {
       param($Name, $AllowWindowsExecutable)
@@ -160,6 +164,34 @@ Describe 'Install-BacklogCli' {
     } -ModuleName Backlog
 
     { Install-BacklogCli } | Should -Throw '*npm*'
+  }
+
+  It 'elige el primer node/npm usable con multi-hit' {
+    Mock Get-HubCommandExecutablePaths {
+      param($Name, $AllowWindowsExecutable)
+      if ($Name -eq 'node') { return @('/usr/bin/node', '/usr/local/bin/node') }
+      if ($Name -eq 'npm') { return @('/usr/bin/npm', '/usr/local/bin/npm') }
+      return @()
+    } -ModuleName Backlog
+    Mock Resolve-BacklogNpmPrefixBin { $null } -ModuleName Backlog
+    Mock Resolve-BacklogCliStatus {
+      [pscustomobject]@{
+        Status = 'Ok'
+        Path = '/usr/local/bin/backlog'
+        Paths = @('/usr/local/bin/backlog')
+        RejectedPaths = @()
+        InvalidPaths = @()
+        Message = $null
+      }
+    } -ModuleName Backlog
+
+    $npmInvoker = {
+      param($NpmPath, $A1, $A2, $A3, $A4)
+      $script:pickedNpm = $NpmPath
+      $global:LASTEXITCODE = 0
+    }
+    $null = Install-BacklogCli -NpmInvoker $npmInvoker -VersionInvoker { $true }
+    $script:pickedNpm | Should -Be '/usr/bin/npm'
   }
 
   It 'falla si npm install no es cero' {

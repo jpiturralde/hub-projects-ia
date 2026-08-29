@@ -8,9 +8,10 @@ alwaysApply: false
 
 Si existe **`.atl/onboarding-pending.json`** en la raiz del workspace:
 
-1. En el **primer mensaje** de la sesion, o cuando el usuario pregunte como continuar / empezar / "que hago ahora" / si tiene Engram o MCP:
+1. En el **primer mensaje** de la sesion, o cuando el usuario pregunte como continuar / empezar / "que hago ahora" / si tiene el entorno o MCP listos:
    - Indica que la checklist esta en **`docs/GETTING-STARTED.md`**.
-   - Recalca: **esta carpeta** debe ser el workspace raiz en Cursor (no el **hub generador padre**) para que carguen MCP (`engram`, etc.).
+   - Recalca: **esta carpeta** debe ser el workspace raiz en Cursor (no el **hub generador padre**) para que carguen el contexto y las integraciones locales.
+   - Menciona que la verificacion de herramientas sale de `requires` en la metadata (o toggles si aun no hay `requires`) y **no** requiere PowerShell.
    - Ofrece ejecutar **`/onboarding`** para un recorrido guiado.
 
 2. **Un solo recordatorio breve** por sesion. No bloquees otras tareas si el usuario ya sabe lo que quiere.
@@ -20,4 +21,4 @@ Si existe **`.atl/onboarding-pending.json`** en la raiz del workspace:
 ## Relacion con otros flujos
 
 - `/onboarding` es previo a `bootstrap-consulting-engagement`, `/cdd-init` o `/sdd-init`.
-- No sustituye esos comandos; prepara el entorno (workspace + MCP + checklist).
+- No sustituye esos comandos; prepara el entorno (workspace + herramientas + checklist).

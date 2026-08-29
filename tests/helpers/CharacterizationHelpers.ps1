@@ -306,16 +306,16 @@ function Get-EquivalenceProjectSnapshot {
   $profilePath = Join-Path $root '.project-profile.json'
   if (Test-Path -LiteralPath $engagementPath) {
     $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp', 'includeStartiaMcp')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp', 'includeStartiaMcp', 'requires')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
-        $metadata[$key] = $meta.$key
+        $metadata[$key] = if ($key -eq 'requires') { ConvertTo-EquivalenceRequiresContract -Requires $meta.requires } else { $meta.$key }
       }
     }
   } elseif (Test-Path -LiteralPath $profilePath) {
     $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope', 'includeStartiaMcp')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope', 'includeStartiaMcp', 'requires')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
-        $metadata[$key] = $meta.$key
+        $metadata[$key] = if ($key -eq 'requires') { ConvertTo-EquivalenceRequiresContract -Requires $meta.requires } else { $meta.$key }
       }
     }
   }
@@ -384,6 +384,29 @@ function Export-EquivalenceExpectedContract {
   return $OutputPath
 }
 
+function ConvertTo-EquivalenceRequiresContract {
+  param($Requires)
+  if ($null -eq $Requires) { return $null }
+  $tools = [System.Collections.Generic.List[object]]::new()
+  foreach ($tool in @($Requires.tools)) {
+    $level = [string]$tool.level
+    if ($level -eq 'absent') { continue }
+    $tools.Add([ordered]@{ id = [string]$tool.id; level = $level })
+  }
+  return [ordered]@{
+    version = if ($null -ne $Requires.version) { [int]$Requires.version } else { 1 }
+    tools = @($tools.ToArray())
+  }
+}
+
+function Get-EquivalenceRequiresFingerprint {
+  param($Requires)
+  if ($null -eq $Requires) { return '' }
+  $contract = ConvertTo-EquivalenceRequiresContract -Requires $Requires
+  $parts = @($contract.tools | ForEach-Object { '{0}={1}' -f $_.id, $_.level })
+  return ('v{0}|{1}' -f $contract.version, ($parts -join ','))
+}
+
 function Assert-EquivalenceContractMatch {
   param(
     [Parameter(Mandatory = $true)]$Snapshot,
@@ -414,6 +437,14 @@ function Assert-EquivalenceContractMatch {
 
   foreach ($prop in @($expected.metadata.PSObject.Properties)) {
     $actualVal = $Snapshot.metadata[$prop.Name]
+    if ($prop.Name -eq 'requires') {
+      $actualFp = Get-EquivalenceRequiresFingerprint -Requires $actualVal
+      $expectedFp = Get-EquivalenceRequiresFingerprint -Requires $prop.Value
+      if ($actualFp -ne $expectedFp) {
+        $errors.Add("metadata.requires: actual=$actualFp expected=$expectedFp")
+      }
+      continue
+    }
     if ("$actualVal" -ne "$($prop.Value)") {
       $errors.Add("metadata.$($prop.Name): actual=$actualVal expected=$($prop.Value)")
     }

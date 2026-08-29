@@ -257,6 +257,22 @@ function Get-GentleAiEnvironment {
   GentleAi\Get-GentleAiEnvironment -TargetPath $TargetPath -UserHome $UserHome
 }
 
+function Get-GentleAiDualInstallDiagnosis {
+  param(
+    [string] $TargetPath,
+    [string] $UserHome
+  )
+  GentleAi\Get-GentleAiDualInstallDiagnosis -TargetPath $TargetPath -UserHome $UserHome
+}
+
+function Test-GentleAiDualInstall {
+  param(
+    [string] $TargetPath,
+    [string] $UserHome
+  )
+  GentleAi\Test-GentleAiDualInstall -TargetPath $TargetPath -UserHome $UserHome
+}
+
 function Install-GentleAiCliStable { GentleAi\Install-GentleAiCliStable }
 function Invoke-GentleAiInstall {
   param(
@@ -394,12 +410,571 @@ function Write-ConsultingMcpJson {
   [System.IO.File]::WriteAllText($path, $json + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
+function Get-HubProjectRequiresKnownIds {
+  return @('node', 'npm', 'npx', 'pandoc', 'backlog', 'archi', 'gentle-ai')
+}
+
+function Resolve-HubRequiresStackProfile {
+  param([string] $StackProfileValue)
+  $normalized = ([string]$StackProfileValue).Trim()
+  switch -Regex ($normalized) {
+    '^(?i)gentle-ai-only$' { return 'GentleAi' }
+    '^(?i)gentleai$' { return 'GentleAi' }
+    '^(?i)consulting-only$' { return 'Consulting' }
+    '^(?i)consulting$' { return 'Consulting' }
+    '^(?i)consulting-ai$' { return 'ConsultingAI' }
+    '^(?i)consultingai$' { return 'ConsultingAI' }
+    '^(?i)full$' { return 'Full' }
+    default { return $normalized }
+  }
+}
+
+function Build-HubProjectRequires {
+  param(
+    [string] $StackProfileValue = 'Consulting',
+    [bool] $IncludeDrawioMcp = $false,
+    [bool] $IncludeBacklogMcp = $false,
+    [bool] $IncludeArchiMcp = $false,
+    [string] $GentleAiScope = 'none'
+  )
+
+  $profile = Resolve-HubRequiresStackProfile -StackProfileValue $StackProfileValue
+  $isConsulting = $profile -in @('Consulting', 'ConsultingAI', 'Full')
+  $scope = if ([string]::IsNullOrWhiteSpace($GentleAiScope)) { 'none' } else { $GentleAiScope.Trim().ToLowerInvariant() }
+
+  $levels = [ordered]@{}
+  if ($IncludeDrawioMcp) {
+    $levels['node'] = 'required'
+    $levels['npm'] = 'required'
+    $levels['npx'] = 'required'
+  }
+  if ($IncludeArchiMcp) {
+    $levels['archi'] = 'required'
+    $levels['node'] = 'required'
+    $levels['npm'] = 'required'
+  }
+  if ($isConsulting) {
+    $levels['pandoc'] = 'optional'
+    if ($IncludeBacklogMcp) { $levels['backlog'] = 'required' }
+    else { $levels['backlog'] = 'optional' }
+  }
+  if ($scope -in @('global', 'workspace')) {
+    $levels['gentle-ai'] = 'required'
+  }
+
+  # MUST emit only non-absent; Engram is never a tool id.
+  $tools = [System.Collections.Generic.List[object]]::new()
+  foreach ($id in (Get-HubProjectRequiresKnownIds)) {
+    if ($levels.Contains($id)) {
+      $tools.Add([ordered]@{ id = $id; level = [string]$levels[$id] })
+    }
+  }
+  return [ordered]@{ version = 1; tools = @($tools.ToArray()) }
+}
+
+function ConvertTo-HubNormalizedRequires {
+  param($Requires)
+  $map = [ordered]@{}
+  foreach ($id in (Get-HubProjectRequiresKnownIds)) { $map[$id] = 'absent' }
+  if ($null -ne $Requires -and ($Requires.PSObject.Properties.Name -contains 'tools') -and $null -ne $Requires.tools) {
+    foreach ($tool in @($Requires.tools)) {
+      $id = [string]$tool.id
+      if ($map.Contains($id)) {
+        $level = ([string]$tool.level).Trim().ToLowerInvariant()
+        if ($level -in @('required', 'optional', 'absent')) { $map[$id] = $level }
+      }
+    }
+  }
+  $tools = [System.Collections.Generic.List[object]]::new()
+  foreach ($id in (Get-HubProjectRequiresKnownIds)) {
+    $tools.Add([pscustomobject]@{ id = $id; level = [string]$map[$id] })
+  }
+  $version = 1
+  if ($null -ne $Requires -and ($Requires.PSObject.Properties.Name -contains 'version') -and $null -ne $Requires.version) {
+    $version = [int]$Requires.version
+  }
+  return [pscustomobject]@{ version = $version; tools = @($tools.ToArray()) }
+}
+
+function Get-HubProjectRequirements {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath
+  )
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
+  $engagementPath = Join-Path $TargetPath '.consulting-engagement.json'
+  $profilePath = Join-Path $TargetPath '.project-profile.json'
+
+  $meta = $null
+  $metaKind = $null
+  if (Test-Path -LiteralPath $engagementPath) {
+    $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $metaKind = 'engagement'
+  } elseif (Test-Path -LiteralPath $profilePath) {
+    $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $metaKind = 'profile'
+  } else {
+    throw "No se encontró metadata de proyecto en: $TargetPath"
+  }
+
+  $schemaVersion = 0
+  if ($meta.PSObject.Properties.Name -contains 'schemaVersion' -and $null -ne $meta.schemaVersion) {
+    $schemaVersion = [int]$meta.schemaVersion
+  }
+
+  if ($schemaVersion -ge 4 -and ($meta.PSObject.Properties.Name -contains 'requires') -and $null -ne $meta.requires) {
+    return ConvertTo-HubNormalizedRequires -Requires $meta.requires
+  }
+
+  $stackProfileValue = if ($metaKind -eq 'profile') { 'gentle-ai-only' } else { [string]$meta.stackProfile }
+  $includeDrawio = $false
+  $includeBacklog = $false
+  $includeArchi = $false
+  $gentleScope = 'none'
+  if ($meta.PSObject.Properties.Name -contains 'includeDrawioMcp') { $includeDrawio = [bool]$meta.includeDrawioMcp }
+  if ($meta.PSObject.Properties.Name -contains 'includeBacklogMcp') { $includeBacklog = [bool]$meta.includeBacklogMcp }
+  if ($meta.PSObject.Properties.Name -contains 'includeArchiMcp') { $includeArchi = [bool]$meta.includeArchiMcp }
+  if ($meta.PSObject.Properties.Name -contains 'gentleAiScope' -and $meta.gentleAiScope) {
+    $gentleScope = [string]$meta.gentleAiScope
+  } elseif ($metaKind -eq 'profile') {
+    $gentleScope = 'global'
+  }
+
+  $built = Build-HubProjectRequires `
+    -StackProfileValue $stackProfileValue `
+    -IncludeDrawioMcp $includeDrawio `
+    -IncludeBacklogMcp $includeBacklog `
+    -IncludeArchiMcp $includeArchi `
+    -GentleAiScope $gentleScope
+  return ConvertTo-HubNormalizedRequires -Requires ([pscustomobject]$built)
+}
+
+function Test-HubCommandPathVersionOk {
+  param(
+    [Parameter(Mandatory = $true)][string] $Path,
+    [scriptblock] $VersionInvoker
+  )
+  if ($VersionInvoker) {
+    try {
+      $result = & $VersionInvoker $Path
+      if ($result -is [bool]) { return [bool]$result }
+      if ($null -eq $result) { return ($LASTEXITCODE -eq 0) }
+      return [bool]$result
+    } catch {
+      return $false
+    }
+  }
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+  try {
+    $null = & $Path --version 2>&1
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  }
+}
+
+function Get-HubUsableCommandPaths {
+  param(
+    [Parameter(Mandatory = $true)][string] $Name,
+    [scriptblock] $VersionInvoker,
+    [switch] $AllowWindowsExecutable
+  )
+  $paths = @(Get-CommandExecutablePaths -Name $Name -AllowWindowsExecutable:$AllowWindowsExecutable)
+  return @($paths | Where-Object { Test-HubCommandPathVersionOk -Path $_ -VersionInvoker $VersionInvoker })
+}
+
+function Test-HubToolUsable {
+  param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('node', 'npm', 'npx', 'pandoc', 'backlog', 'archi', 'gentle-ai')]
+    [string] $Id,
+    [string] $Policy,
+    [string] $ArchiPath,
+    [scriptblock] $VersionInvoker
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Policy)) {
+    $Policy = switch ($Id) {
+      'gentle-ai' { 'eq1-native' }
+      'backlog' { 'backlog-status' }
+      'archi' { 'archi-path' }
+      default { 'ge1-usable' }
+    }
+  }
+
+  switch ($Id) {
+    { $_ -in @('node', 'npm', 'npx', 'pandoc') } {
+      $usable = @(Get-HubUsableCommandPaths -Name $Id -VersionInvoker $VersionInvoker)
+      return [pscustomobject]@{
+        Id = $Id
+        Ok = ($usable.Count -ge 1)
+        Policy = 'ge1-usable'
+        Path = if ($usable.Count -ge 1) { $usable[0] } else { $null }
+        Paths = $usable
+        Status = if ($usable.Count -ge 1) { 'Ok' } else { 'Missing' }
+        Message = if ($usable.Count -ge 1) { $null } else { "$Id no usable en PATH (≥1 requerido)." }
+      }
+    }
+    'gentle-ai' {
+      # eq1-native + WSL Windows-origin reject (Resolve-GentleAiCliStatus)
+      $status = Resolve-GentleAiCliStatus
+      return [pscustomobject]@{
+        Id = $Id
+        Ok = ($status.Status -eq 'Ok')
+        Policy = 'eq1-native'
+        Path = $status.Path
+        Paths = @($status.Paths)
+        Status = $status.Status
+        Message = $status.Message
+      }
+    }
+    'backlog' {
+      $status = Resolve-BacklogCliStatus -VersionInvoker $VersionInvoker
+      return [pscustomobject]@{
+        Id = $Id
+        Ok = ($status.Status -eq 'Ok')
+        Policy = 'backlog-status'
+        Path = $status.Path
+        Paths = @($status.Paths)
+        Status = $status.Status
+        Message = $status.Message
+      }
+    }
+    'archi' {
+      if ([string]::IsNullOrWhiteSpace($ArchiPath)) {
+        return [pscustomobject]@{
+          Id = $Id
+          Ok = $false
+          Policy = 'archi-path'
+          Path = $null
+          Paths = @()
+          Status = 'Missing'
+          Message = 'Archi MCP path no configurado.'
+        }
+      }
+      try {
+        $resolved = Test-HubArchiMcpPath -Path $ArchiPath
+        return [pscustomobject]@{
+          Id = $Id
+          Ok = $true
+          Policy = 'archi-path'
+          Path = $resolved
+          Paths = @($resolved)
+          Status = 'Ok'
+          Message = $null
+        }
+      } catch {
+        return [pscustomobject]@{
+          Id = $Id
+          Ok = $false
+          Policy = 'archi-path'
+          Path = $null
+          Paths = @()
+          Status = 'Invalid'
+          Message = $_.Exception.Message
+        }
+      }
+    }
+  }
+}
+
+function Get-HubProjectEnvironmentDoctorTemplatePath {
+  # Module lives in scripts/lib → template is scripts/templates/...
+  $scriptsDir = Split-Path -Parent $PSScriptRoot
+  return (Join-Path $scriptsDir 'templates' 'Test-ProjectEnvironment.ps1')
+}
+
+function Sync-ProjectEnvironmentDoctorScript {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
+  $template = Get-HubProjectEnvironmentDoctorTemplatePath
+  if (-not (Test-Path -LiteralPath $template -PathType Leaf)) {
+    throw "No se encuentra la plantilla del doctor de entorno: $template"
+  }
+  $scriptsDir = Join-Path $TargetPath 'scripts'
+  if (-not (Test-Path -LiteralPath $scriptsDir)) {
+    New-Item -ItemType Directory -Path $scriptsDir -Force | Out-Null
+  }
+  $dest = Join-Path $scriptsDir 'Test-ProjectEnvironment.ps1'
+  Copy-Item -LiteralPath $template -Destination $dest -Force
+}
+
+function Test-HubLocalMcpJsonPathsHealthy {
+  param([Parameter(Mandatory = $true)]$McpJson)
+  if ($null -eq $McpJson -or -not ($McpJson.PSObject.Properties.Name -contains 'mcpServers') -or $null -eq $McpJson.mcpServers) {
+    return $true
+  }
+  foreach ($prop in @($McpJson.mcpServers.PSObject.Properties)) {
+    $server = $prop.Value
+    if ($null -eq $server) { continue }
+    $name = [string]$prop.Name
+    # Parity with portable Get-PortableLocalMcpCheck / Test-PortableArchiPath
+    if ($name -eq 'archi' -and ($server.PSObject.Properties.Name -contains 'args') -and $null -ne $server.args -and @($server.args).Count -gt 0) {
+      try {
+        Test-HubArchiMcpPath -Path ([string]$server.args[0]) | Out-Null
+      } catch {
+        return $false
+      }
+      continue
+    }
+    if ($server.PSObject.Properties.Name -contains 'args' -and $null -ne $server.args) {
+      foreach ($arg in @($server.args)) {
+        $s = [string]$arg
+        if ([string]::IsNullOrWhiteSpace($s)) { continue }
+        # Absolute path-like args must exist when they look like files/dirs
+        if ($s -match '^(?:[A-Za-z]:[\\/]|/|\\\\)') {
+          if ($s -match '(?i)(?:index\.js|\.mjs|\.cjs)$' -or $s -match '(?i)[/\\]') {
+            if (-not (Test-Path -LiteralPath $s)) { return $false }
+          }
+        }
+      }
+    }
+  }
+  return $true
+}
+
+function Get-HubProjectLocalMcpDoctorCheck {
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [bool] $LocalMcpToolsRequired = $false
+  )
+  $mcpPath = Join-HubPath $TargetPath '.cursor' 'mcp.json'
+  $level = if ($LocalMcpToolsRequired) { 'required' } else { 'optional' }
+  $base = [ordered]@{
+    id = 'local-mcp'
+    level = $level
+    pass = $true
+    state = 'n/a'
+    message = ''
+  }
+
+  if (-not (Test-Path -LiteralPath $mcpPath -PathType Leaf)) {
+    $base.state = 'not-materialized'
+    if ($LocalMcpToolsRequired) {
+      $base.pass = $false
+      $base.message = 'Aún no hay archivo MCP local y este proyecto necesita servidores locales — copiá el ejemplo si aplica.'
+    } else {
+      $base.pass = $true
+      $base.message = 'Aún no hay archivo MCP local — es normal tras un clone si no hace falta materializarlo.'
+    }
+    return [pscustomobject]$base
+  }
+
+  try {
+    $raw = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8
+    $json = $raw | ConvertFrom-Json
+  } catch {
+    $base.state = 'broken'
+    $base.pass = $false
+    $base.level = 'required'
+    $base.message = 'El archivo MCP local tiene problemas (JSON inválido).'
+    return [pscustomobject]$base
+  }
+
+  $servers = $null
+  if ($json.PSObject.Properties.Name -contains 'mcpServers') { $servers = $json.mcpServers }
+  if ($null -ne $servers -and @($servers.PSObject.Properties.Name | Where-Object { $_ -eq 'engram' }).Count -gt 0) {
+    $base.state = 'broken'
+    $base.pass = $false
+    $base.level = 'required'
+    $base.message = 'El archivo MCP local tiene una entrada inesperada de memoria persistente — quitála; se gestiona fuera de este repo.'
+    return [pscustomobject]$base
+  }
+
+  if (-not (Test-HubLocalMcpJsonPathsHealthy -McpJson $json)) {
+    $base.state = 'broken'
+    $base.pass = $false
+    $base.level = 'required'
+    $base.message = 'El archivo MCP local tiene problemas (rutas inválidas).'
+    return [pscustomobject]$base
+  }
+
+  $base.state = 'configured'
+  $base.pass = $true
+  $base.message = 'El archivo MCP local parece listo.'
+  return [pscustomobject]$base
+}
+
+function Get-HubProjectEnvironmentDoctorMeta {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  $engagementPath = Join-Path $TargetPath '.consulting-engagement.json'
+  $profilePath = Join-Path $TargetPath '.project-profile.json'
+  $meta = $null
+  if (Test-Path -LiteralPath $engagementPath) {
+    $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  } elseif (Test-Path -LiteralPath $profilePath) {
+    $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  $includeDrawio = $false
+  $includeBacklog = $false
+  $includeArchi = $false
+  $archiPath = $null
+  if ($null -ne $meta) {
+    if ($meta.PSObject.Properties.Name -contains 'includeDrawioMcp') { $includeDrawio = [bool]$meta.includeDrawioMcp }
+    if ($meta.PSObject.Properties.Name -contains 'includeBacklogMcp') { $includeBacklog = [bool]$meta.includeBacklogMcp }
+    if ($meta.PSObject.Properties.Name -contains 'includeArchiMcp') { $includeArchi = [bool]$meta.includeArchiMcp }
+  }
+  $mcpPath = Join-Path $TargetPath '.cursor' 'mcp.json'
+  if ($includeArchi -and (Test-Path -LiteralPath $mcpPath -PathType Leaf)) {
+    try {
+      $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      if ($mcp.mcpServers -and ($mcp.mcpServers.PSObject.Properties.Name -contains 'archi')) {
+        $args = @($mcp.mcpServers.archi.args)
+        if ($args.Count -gt 0) { $archiPath = [string]$args[0] }
+      }
+    } catch { }
+  }
+  return [pscustomobject]@{
+    IncludeDrawioMcp = $includeDrawio
+    IncludeBacklogMcp = $includeBacklog
+    IncludeArchiMcp = $includeArchi
+    ArchiPath = $archiPath
+    LocalMcpToolsRequired = ($includeDrawio -or $includeBacklog -or $includeArchi)
+  }
+}
+
+function Get-HubToolDoctorEsMessage {
+  param(
+    [string] $Id,
+    [bool] $Pass,
+    [string] $Status,
+    [string] $Detail
+  )
+  if ($Pass) {
+    switch ($Id) {
+      'node' { return 'Node usable en PATH' }
+      'npm' { return 'npm usable en PATH' }
+      'npx' { return 'npx usable en PATH' }
+      'pandoc' { return 'Pandoc usable en PATH' }
+      'backlog' { return 'CLI de backlog usable' }
+      'archi' { return 'Ruta Archi MCP configurada' }
+      'gentle-ai' { return 'CLI del asistente de desarrollo usable (nativo)' }
+      default { return "$Id OK" }
+    }
+  }
+  switch ($Id) {
+    'node' { return 'Falta Node usable en PATH (necesario para diagramas/herramientas del proyecto).' }
+    'npm' { return 'Falta npm usable en PATH.' }
+    'npx' { return 'Falta npx usable en PATH.' }
+    'pandoc' { return 'Pandoc no está disponible (opcional para documentos).' }
+    'backlog' {
+      if ($Status -eq 'Duplicate') {
+        return 'Hay más de una CLI de backlog válida en PATH — dejá solo una nativa.'
+      }
+      if ($Status -eq 'WindowsOriginRejected') {
+        return 'CLI de backlog detectada solo como ejecutable Windows (inválido en Linux/WSL).'
+      }
+      if ($Status -eq 'Invalid' -or $Status -eq 'Failed') {
+        if (-not [string]::IsNullOrWhiteSpace($Detail)) { return $Detail }
+        return 'CLI backlog en PATH pero ninguna responde a --version.'
+      }
+      return 'Falta la CLI de backlog requerida por este proyecto.'
+    }
+    'archi' { return 'Falta o es inválida la ruta al servidor Archi MCP.' }
+    'gentle-ai' {
+      if ($Status -eq 'WindowsOriginRejected') {
+        return 'Hay un CLI de asistente de Windows bajo WSL — usá la instalación nativa de Linux.'
+      }
+      if ($Status -eq 'Duplicate') {
+        return 'Hay más de un CLI del asistente de desarrollo en PATH — dejá solo uno nativo.'
+      }
+      return 'Falta el CLI del asistente de desarrollo requerido por este proyecto.'
+    }
+    default {
+      if (-not [string]::IsNullOrWhiteSpace($Detail)) { return $Detail }
+      return "Falta o falló la herramienta: $Id"
+    }
+  }
+}
+
+function Invoke-HubProjectEnvironmentDoctor {
+  <#
+    Detect-only environment doctor for a child project.
+    Exit semantics: ≠0 (2) when any required tool fails OR local-mcp is broken.
+  #>
+  param(
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [switch] $AsJson
+  )
+  $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
+  $requires = Get-HubProjectRequirements -TargetPath $TargetPath
+  $metaCtx = Get-HubProjectEnvironmentDoctorMeta -TargetPath $TargetPath
+  $checks = [System.Collections.Generic.List[object]]::new()
+
+  foreach ($tool in @($requires.tools)) {
+    $level = [string]$tool.level
+    if ($level -eq 'absent') { continue }
+    $id = [string]$tool.id
+    $probe = Test-HubToolUsable -Id $id -ArchiPath $metaCtx.ArchiPath
+    $pass = [bool]$probe.Ok
+    $state = if ($pass) { 'ok' } elseif ($probe.Status -eq 'Missing') { 'missing' } else { 'failed' }
+    $checks.Add([pscustomobject]@{
+        id = $id
+        level = $level
+        pass = $pass
+        state = $state
+        message = (Get-HubToolDoctorEsMessage -Id $id -Pass $pass -Status ([string]$probe.Status) -Detail ([string]$probe.Message))
+      })
+  }
+
+  $localMcp = Get-HubProjectLocalMcpDoctorCheck -TargetPath $TargetPath -LocalMcpToolsRequired ([bool]$metaCtx.LocalMcpToolsRequired)
+  $checks.Add($localMcp)
+
+  $dual = Get-GentleAiDualInstallDiagnosis -TargetPath $TargetPath
+  if ($dual.Dual) {
+    $checks.Add([pscustomobject]@{
+        id = 'gentle-ai-dual'
+        level = 'optional'
+        pass = $false
+        state = 'failed'
+        message = 'Hay instalación duplicada del asistente (global y en este workspace). Es solo diagnóstico; no se modifica nada automáticamente.'
+      })
+  }
+
+  $hasBrokenMcp = @($checks | Where-Object { [string]$_.id -eq 'local-mcp' -and [string]$_.state -eq 'broken' }).Count -gt 0
+  $requiredOk = @($checks | Where-Object { [string]$_.level -eq 'required' -and -not [bool]$_.pass }).Count -eq 0
+  $ok = $requiredOk -and (-not $hasBrokenMcp)
+  $exitCode = if ($ok) { 0 } else { 2 }
+
+  $result = [pscustomobject]@{
+    ok = $ok
+    exitCode = $exitCode
+    checks = @($checks.ToArray())
+    targetPath = $TargetPath
+  }
+
+  if ($AsJson) {
+    return ($result | Select-Object ok, exitCode, checks | ConvertTo-Json -Depth 6)
+  }
+  return $result
+}
+
+function Write-HubProjectEnvironmentDoctor {
+  param([Parameter(Mandatory = $true)]$Result)
+  $status = if ($Result.ok) { 'OK' } else { 'PROBLEMAS' }
+  Write-Host "Diagnóstico de entorno: $status (exit $($Result.exitCode))"
+  foreach ($c in @($Result.checks)) {
+    $mark = if ($c.pass) { '[ok]' } else { '[!!]' }
+    Write-Host ("  {0} {1} ({2}): {3}" -f $mark, $c.id, $c.level, $c.message)
+  }
+}
+
 function Write-EngagementMetadata {
   param([string] $TargetPath, [string] $StackProfileValue, [System.Collections.IDictionary] $Fields)
-  $meta = [ordered]@{ schemaVersion = 3; stackProfile = $StackProfileValue; generatedAt = (Get-Date).ToString('o') }
-  foreach ($key in $Fields.Keys) { $meta[$key] = $Fields[$key] }
+  $meta = [ordered]@{ schemaVersion = 4; stackProfile = $StackProfileValue; generatedAt = (Get-Date).ToString('o') }
+  foreach ($key in $Fields.Keys) {
+    if ($key -in @('requires', 'schemaVersion')) { continue }
+    $meta[$key] = $Fields[$key]
+  }
+  $gentleScope = if ($meta.Contains('gentleAiScope')) { [string]$meta['gentleAiScope'] } else { 'none' }
+  $meta['requires'] = Build-HubProjectRequires `
+    -StackProfileValue $StackProfileValue `
+    -IncludeDrawioMcp ([bool]$(if ($meta.Contains('includeDrawioMcp')) { $meta['includeDrawioMcp'] } else { $false })) `
+    -IncludeBacklogMcp ([bool]$(if ($meta.Contains('includeBacklogMcp')) { $meta['includeBacklogMcp'] } else { $false })) `
+    -IncludeArchiMcp ([bool]$(if ($meta.Contains('includeArchiMcp')) { $meta['includeArchiMcp'] } else { $false })) `
+    -GentleAiScope $gentleScope
   $path = Join-Path $TargetPath '.consulting-engagement.json'
-  [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 6) + "`n"), [System.Text.UTF8Encoding]::new($false))
+  [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 8) + "`n"), [System.Text.UTF8Encoding]::new($false))
+  Sync-ProjectEnvironmentDoctorScript -TargetPath $TargetPath
 }
 
 function Write-ProjectProfile {
@@ -409,16 +984,19 @@ function Write-ProjectProfile {
     [string] $GentleAiScope,
     [bool] $IncludeStartiaMcp = $false
   )
+  $scope = $GentleAiScope.ToLowerInvariant()
   $meta = [ordered]@{
-    schemaVersion = 3
+    schemaVersion = 4
     stackProfile = 'gentle-ai-only'
     projectName = $ProjectName
-    gentleAiScope = $GentleAiScope.ToLowerInvariant()
+    gentleAiScope = $scope
     includeStartiaMcp = [bool]$IncludeStartiaMcp
     generatedAt = (Get-Date).ToString('o')
+    requires = Build-HubProjectRequires -StackProfileValue 'gentle-ai-only' -GentleAiScope $scope
   }
   $path = Join-Path $TargetPath '.project-profile.json'
-  [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 5) + "`n"), [System.Text.UTF8Encoding]::new($false))
+  [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 8) + "`n"), [System.Text.UTF8Encoding]::new($false))
+  Sync-ProjectEnvironmentDoctorScript -TargetPath $TargetPath
 }
 
 function Write-StackProfileConfig {
@@ -454,12 +1032,12 @@ function Get-GettingStartedProfileLabel {
   param([string] $StackProfile, [string] $GentleAiScope = 'None')
   switch ($StackProfile) {
     'GentleAi' {
-      if ($GentleAiScope -ne 'None') { return "GentleAi ($GentleAiScope + Engram)" }
+      if ($GentleAiScope -ne 'None') { return "GentleAi ($GentleAiScope + memoria del asistente)" }
       return 'GentleAi'
     }
     'Consulting' { return 'Consulting (sin Gentle AI)' }
-    'ConsultingAI' { return 'ConsultingAI (CDD + SDD + Engram)' }
-    'Full' { return 'Full (CDD + SDD + Engram)' }
+    'ConsultingAI' { return 'ConsultingAI (CDD + SDD + memoria del asistente)' }
+    'Full' { return 'Full (CDD + SDD + memoria del asistente)' }
     default { return $StackProfile }
   }
 }
@@ -476,12 +1054,13 @@ function Update-ProjectGettingStartedFromMetadata {
 
   if (Test-Path -LiteralPath $engagementPath) {
     $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $stackProfile = switch ([string]$meta.stackProfile) {
+    $stackProfileValue = [string]$meta.stackProfile
+    $stackProfile = switch ($stackProfileValue) {
       'consulting-only' { 'Consulting' }
       'consulting-ai' { 'ConsultingAI' }
       'full' { 'Full' }
       default {
-        $normalized = ([string]$meta.stackProfile).Trim()
+        $normalized = $stackProfileValue.Trim()
         if ($normalized -match '^(?i)consultingai$') { 'ConsultingAI' }
         elseif ($normalized -match '^(?i)full$') { 'Full' }
         elseif ($normalized -match '^(?i)consulting$') { 'Consulting' }
@@ -494,6 +1073,15 @@ function Update-ProjectGettingStartedFromMetadata {
     } elseif ($stackProfile -in @('ConsultingAI', 'Full')) {
       $gentleScope = 'Global'
     }
+
+    # Same writer path as New-* / hub refresh --all: upsert schemaVersion 4 + requires.
+    $fields = [ordered]@{}
+    foreach ($prop in @($meta.PSObject.Properties)) {
+      if ($prop.Name -in @('schemaVersion', 'stackProfile', 'generatedAt', 'requires')) { continue }
+      $fields[$prop.Name] = $prop.Value
+    }
+    Write-EngagementMetadata -TargetPath $TargetPath -StackProfileValue $stackProfileValue -Fields $fields
+
     $title = if ($meta.docTitlePrefix) { [string]$meta.docTitlePrefix } else { Split-Path -Leaf $TargetPath }
     $templateName = if ($meta.corporateDocxTemplateName) { [string]$meta.corporateDocxTemplateName } else { 'Plantilla Ingenia - 2025.docx' }
     $includeStartia = ($meta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$meta.includeStartiaMcp
@@ -511,12 +1099,68 @@ function Update-ProjectGettingStartedFromMetadata {
       ([string]$meta.gentleAiScope).Substring(0, 1).ToUpperInvariant() + ([string]$meta.gentleAiScope).Substring(1).ToLowerInvariant()
     } else { 'Global' }
     $includeStartia = ($meta.PSObject.Properties.Name -contains 'includeStartiaMcp') -and [bool]$meta.includeStartiaMcp
+    # Same writer path as New-* / hub refresh --all: upsert schemaVersion 4 + requires.
+    Write-ProjectProfile -TargetPath $TargetPath -ProjectName $projectName -GentleAiScope $gentleScope -IncludeStartiaMcp $includeStartia
     return Write-ProjectGettingStarted `
       -TargetPath $TargetPath -StackProfile GentleAi -Title $projectName -GentleAiScope $gentleScope `
       -IncludeStartiaMcp $includeStartia
   }
 
   throw "No se encontró metadata de proyecto en: $TargetPath"
+}
+
+function Get-GettingStartedToolPurposeEs {
+  param([Parameter(Mandatory = $true)][string] $Id)
+  switch ($Id) {
+    'node' { 'Node.js usable en PATH (diagramas y herramientas del proyecto)' }
+    'npm' { 'npm usable en PATH' }
+    'npx' { 'npx usable en PATH (diagramas Draw.io)' }
+    'pandoc' { 'Pandoc para regenerar documentos (.docx)' }
+    'backlog' { 'CLI backlog para el tablero del encargo' }
+    'archi' { 'Archi / archi-server para modelado' }
+    'gentle-ai' { 'CLI de asistencia del proyecto instalado y usable (una sola copia nativa)' }
+    default { $Id }
+  }
+}
+
+function Get-GettingStartedLevelLabelEs {
+  param([Parameter(Mandatory = $true)][string] $Level)
+  switch ($Level.ToLowerInvariant()) {
+    'required' { 'Obligatorio' }
+    'optional' { 'Opcional' }
+    default { $Level }
+  }
+}
+
+function Resolve-GettingStartedRequires {
+  param(
+    [string] $TargetPath,
+    [string] $StackProfile,
+    [string] $GentleAiScope = 'None',
+    [bool] $IncludeDrawioMcp = $false,
+    [bool] $IncludeBacklogMcp = $false,
+    [bool] $IncludeArchiMcp = $false
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($TargetPath) -and (Test-Path -LiteralPath $TargetPath -PathType Container)) {
+    $engagementPath = Join-Path $TargetPath '.consulting-engagement.json'
+    $profilePath = Join-Path $TargetPath '.project-profile.json'
+    if ((Test-Path -LiteralPath $engagementPath) -or (Test-Path -LiteralPath $profilePath)) {
+      try {
+        return Get-HubProjectRequirements -TargetPath $TargetPath
+      } catch {
+        # Fall through to toggle derivation.
+      }
+    }
+  }
+
+  $built = Build-HubProjectRequires `
+    -StackProfileValue $StackProfile `
+    -IncludeDrawioMcp $IncludeDrawioMcp `
+    -IncludeBacklogMcp $IncludeBacklogMcp `
+    -IncludeArchiMcp $IncludeArchiMcp `
+    -GentleAiScope $GentleAiScope
+  return ConvertTo-HubNormalizedRequires -Requires ([pscustomobject]$built)
 }
 
 function Write-ProjectGettingStarted {
@@ -534,18 +1178,58 @@ function Write-ProjectGettingStarted {
   $isConsulting = $StackProfile -ne 'GentleAi'
   $hasCdd = $StackProfile -in @('ConsultingAI', 'Full')
 
-  $expectedMcp = @()
-  if ($requiresGentleAi) { $expectedMcp += 'engram' }
-  if ($IncludeDrawioMcp) { $expectedMcp += 'drawio' }
-  if ($IncludeBacklogMcp) { $expectedMcp += 'backlog' }
-  if ($IncludeArchiMcp) { $expectedMcp += 'archi' }
-  if ($IncludeStartiaMcp) { $expectedMcp += 'startia' }
-  $expectedMcpLabel = if ($expectedMcp.Count) { $expectedMcp -join ', ' } else { 'ninguno' }
+  $requires = Resolve-GettingStartedRequires `
+    -TargetPath $TargetPath `
+    -StackProfile $StackProfile `
+    -GentleAiScope $GentleAiScope `
+    -IncludeDrawioMcp $IncludeDrawioMcp `
+    -IncludeBacklogMcp $IncludeBacklogMcp `
+    -IncludeArchiMcp $IncludeArchiMcp
 
-  $engramNote = if ($requiresGentleAi) {
+  $visibleTools = @($requires.tools | Where-Object { $_.level -in @('required', 'optional') })
+  $prereqRows = @()
+  foreach ($tool in $visibleTools) {
+    $levelLabel = Get-GettingStartedLevelLabelEs -Level ([string]$tool.level)
+    $purpose = Get-GettingStartedToolPurposeEs -Id ([string]$tool.id)
+    $prereqRows += "| ``$($tool.id)`` | $levelLabel | $purpose |"
+  }
+  $prereqTable = if ($prereqRows.Count) {
+    "| Herramienta | Nivel | Para que |`n|-------------|-------|----------|`n$($prereqRows -join "`n")"
+  } else {
+    '_Sin herramientas adicionales listadas para este perfil._'
+  }
+
+  # Local MCP expected servers — never Engram (gentle-ai-managed, not child mcp.json).
+  $localMcpServers = @()
+  if ($IncludeDrawioMcp) { $localMcpServers += 'drawio' }
+  if ($IncludeBacklogMcp) { $localMcpServers += 'backlog' }
+  if ($IncludeArchiMcp) { $localMcpServers += 'archi' }
+  if ($IncludeStartiaMcp) { $localMcpServers += 'startia' }
+  $requiresLocalMcp = $localMcpServers.Count -gt 0
+  $expectedMcpLabel = if ($requiresLocalMcp) { $localMcpServers -join ', ' } else { 'ninguno local' }
+
+  $mcpStateNote = if ($requiresLocalMcp) {
 @"
 
-> **Engram:** el binario en tu maquina no alcanza. Las herramientas MCP (``mem_save``, ``mem_search``, etc.) solo estan disponibles cuando el servidor **engram** figura activo en Cursor Settings -> MCP **despues** de abrir este repo como workspace raiz.
+### Estados del archivo MCP local (``.cursor/mcp.json``)
+
+- **Aun no materializado**: el archivo no existe o aun no esta generado. En este perfil **si importa** porque se esperan servidores locales (**$expectedMcpLabel**): sin ese archivo la verificacion del entorno falla hasta materializarlo.
+- **Con problemas (roto)**: el archivo existe pero tiene JSON invalido, rutas incorrectas, o entradas que no deberian estar ahi. **Siempre es un fallo** a corregir (no es lo mismo que "aun no materializado").
+"@
+  } else {
+@"
+
+### Estados del archivo MCP local (``.cursor/mcp.json``)
+
+- **Aun no materializado**: si no hay archivo MCP local, en este perfil es **solo informativo** (no se requieren servidores locales drawio/backlog/archi).
+- **Con problemas (roto)**: si el archivo existe pero esta mal formado o con rutas/entradas invalidas, **siempre es un fallo** a corregir.
+"@
+  }
+
+  $memoryNote = if ($requiresGentleAi) {
+@"
+
+> **Memoria del asistente:** no se configura en el MCP local de este repo. Tras abrir **esta** carpeta como workspace raiz, revisa Cursor Settings -> MCP: las herramientas de memoria deben figurar activas. Un CLI en terminal no alcanza si el workspace activo sigue siendo el hub padre.
 "@
   } else { '' }
 
@@ -555,19 +1239,6 @@ function Write-ProjectGettingStarted {
 > **Startia:** antes de verificar MCP en verde, configura en el entorno del **usuario** (nunca en el repo) ``GOVERNOR_PAT`` (token Startia) y ``GOVERNOR_TENANT_ID``. Windows: variables de usuario. Linux/WSL: ``~/.bashrc``. Reinicia Cursor despues.
 "@
   } else { '' }
-
-  $prereqRows = @()
-  if ($IncludeDrawioMcp) { $prereqRows += '| Node.js + npx | MCP Draw.io |' }
-  if ($requiresGentleAi) { $prereqRows += '| `engram` CLI | Memoria persistente (Full / GentleAi) |' }
-  if ($IncludeBacklogMcp) { $prereqRows += '| `backlog` CLI | MCP Backlog (si esta configurado) |' }
-  if ($isConsulting) { $prereqRows += '| Pandoc | Regenerar .docx de entregables |' }
-  if ($IncludeArchiMcp) { $prereqRows += '| Archi + archi-server | MCP Archi (si esta configurado) |' }
-  if ($IncludeStartiaMcp) { $prereqRows += '| `GOVERNOR_PAT` + `GOVERNOR_TENANT_ID` | Auth MCP Startia (skills Ingenia) |' }
-  $prereqTable = if ($prereqRows.Count) {
-    "| Herramienta | Para que |`n|-------------|----------|`n$($prereqRows -join "`n")"
-  } else {
-    '_Sin prerequisitos MCP adicionales para este perfil._'
-  }
 
   $consultingWorkflow = if ($hasCdd) {
 @"
@@ -579,7 +1250,7 @@ function Write-ProjectGettingStarted {
 
 ### 4. Inicializar CDD
 
-1. Ejecuta **``/cdd-init``** para registrar contexto del proyecto en Engram.
+1. Ejecuta **``/cdd-init``** para registrar el contexto del proyecto.
 2. Primer entregable: **``/cdd-new [nombre-corto]``** (explore -> propose -> ... -> archive).
 
 CDD es el flujo principal para entregables al cliente. SDD (``/sdd-new``) queda disponible si el encargo incluye desarrollo.
@@ -616,10 +1287,14 @@ Copia **$CorporateDocxTemplateName** en ``docs/templates/`` desde el repositorio
   $gentleAiWorkflow = if ($StackProfile -eq 'GentleAi') {
 @"
 
-## Paso 1 - Verificar Gentle AI
+## Paso 1 - Verificar entorno
 
-- Gentle AI: **$GentleAiScope**. Engram y los componentes administrados se heredan; no se duplican en ``.cursor/mcp.json``.
-- Usá Gentle AI normalmente; SDD se activa cuando corresponde o cuando lo pedís explícitamente.
+$prereqTable
+
+- Alcance de asistencia: **$GentleAiScope**. Los componentes administrados se heredan; **no** se duplican en ``.cursor/mcp.json``.
+- Verifica cada herramienta **obligatoria** desde el terminal o Cursor Settings (no hace falta PowerShell).
+$mcpStateNote
+$memoryNote
 
 ## Paso 2 - Siguiente accion
 
@@ -630,15 +1305,19 @@ Ejecutá **``/start-task``** para arrancar.
   $consultingBody = if ($isConsulting) {
 @"
 
-## Paso 1 - Verificar prerequisitos
+## Paso 1 - Verificar entorno
 
 $prereqTable
+
+Comprueba cada herramienta **obligatoria** (version usable en PATH o instalacion nativa). **No** hace falta ejecutar scripts PowerShell para esta verificacion.
+$mcpStateNote
+$memoryNote
 
 Detalle por SO: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md).
 
 ## Paso 2 - Confirmar metadata del encargo
 
-Revisa ``.consulting-engagement.json`` (cliente, iniciativa, MCP toggles, ``stackProfile``).
+Revisa ``.consulting-engagement.json`` (cliente, iniciativa, MCP toggles, ``stackProfile``, ``requires``).
 $consultingWorkflow
 
 ## Referencia rapida
@@ -652,6 +1331,19 @@ $consultingWorkflow
 "@
   } else { $gentleAiWorkflow }
 
+  $localMcpSteps = if ($requiresLocalMcp) {
+@"
+3. **Cursor Settings -> MCP** - verifica que los servidores locales esperados (**$expectedMcpLabel**) figuren en verde.
+4. Si **archi** o **backlog** usan rutas placeholder, edita ``.cursor/mcp.json`` con rutas absolutas reales (ver [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md)).
+5. En el chat del agente, ejecuta **/onboarding** para un recorrido guiado (workspace, entorno y proximos pasos).
+"@
+  } else {
+@"
+3. **Cursor Settings -> MCP** - confirma que no falten integraciones administradas del asistente (si aplica a tu perfil).
+4. En el chat del agente, ejecuta **/onboarding** para un recorrido guiado (workspace, entorno y proximos pasos).
+"@
+  }
+
   $content = @"
 # Primeros pasos - $Title
 
@@ -659,14 +1351,11 @@ $consultingWorkflow
 
 ## Paso 0 - Abri este repo como workspace (obligatorio)
 
-Los MCP del proyecto (**$expectedMcpLabel**) se leen desde ``.cursor/mcp.json`` de **esta carpeta**. Si seguis con el **hub generador padre** como workspace raiz, Engram y el resto **no** estaran disponibles en el agente aunque el CLI funcione en terminal.
-$engramNote
+Los servidores MCP **locales** del proyecto (**$expectedMcpLabel**) se leen desde ``.cursor/mcp.json`` de **esta carpeta**. Si seguis con el **hub generador padre** como workspace raiz, el contexto y las integraciones de **este** proyecto **no** estaran disponibles en el agente aunque un CLI funcione en terminal.
 $startiaEnvNote
 1. **File -> Open Folder** -> selecciona la raiz de **este** repositorio (la carpeta que contiene este archivo).
-2. **Developer: Reload Window** si los MCP no aparecen al abrir.
-3. **Cursor Settings -> MCP** - verifica que los servidores esperados (**$expectedMcpLabel**) figuren en verde.
-4. Si **archi** o **backlog** usan rutas placeholder, edita ``.cursor/mcp.json`` con rutas absolutas reales (ver [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md)).
-5. En el chat del agente, ejecuta **/onboarding** para un recorrido guiado (workspace, MCP y proximos pasos).
+2. **Developer: Reload Window** si las integraciones no aparecen al abrir.
+$localMcpSteps
 $consultingBody
 ## Seguis en el hub generador?
 
@@ -1612,18 +2301,34 @@ function Get-ConsultingCopilotPreflightDiagnostic {
   }
 
   if ($effectiveProfile -in @('Consulting', 'ConsultingAI')) {
-    $nodePaths = @(Get-CommandExecutablePaths -Name 'node')
+    # 5B: node/npm/npx OK when ≥1 usable PATH hit (not Count -eq 1).
+    $nodeCheck = Test-HubToolUsable -Id node -Policy ge1-usable
+    $npmCheck = Test-HubToolUsable -Id npm -Policy ge1-usable
+    $npxCheck = Test-HubToolUsable -Id npx -Policy ge1-usable
+    $pandocCheck = Test-HubToolUsable -Id pandoc -Policy ge1-usable
     $checks.Add([pscustomobject]@{
       group = 'consulting'
       label = 'Node.js'
-      ok = $nodePaths.Count -eq 1
-      detail = 'Requerido sólo si se usa Draw.io MCP.'
+      ok = [bool]$nodeCheck.Ok
+      detail = if ($nodeCheck.Ok) { $nodeCheck.Path } else { 'Requerido sólo si se usa Draw.io MCP (≥1 usable en PATH).' }
+    })
+    $checks.Add([pscustomobject]@{
+      group = 'consulting'
+      label = 'npm'
+      ok = [bool]$npmCheck.Ok
+      detail = if ($npmCheck.Ok) { $npmCheck.Path } else { 'Requerido con Draw.io / Archi MCP (≥1 usable en PATH).' }
+    })
+    $checks.Add([pscustomobject]@{
+      group = 'consulting'
+      label = 'npx'
+      ok = [bool]$npxCheck.Ok
+      detail = if ($npxCheck.Ok) { $npxCheck.Path } else { 'Requerido si se usa Draw.io MCP (≥1 usable en PATH).' }
     })
     $checks.Add([pscustomobject]@{
       group = 'consulting'
       label = 'Pandoc'
-      ok = @(Get-CommandExecutablePaths -Name 'pandoc').Count -eq 1
-      detail = 'Opcional para regenerar DOCX.'
+      ok = [bool]$pandocCheck.Ok
+      detail = if ($pandocCheck.Ok) { $pandocCheck.Path } else { 'Opcional para regenerar DOCX (≥1 usable en PATH).' }
     })
     $backlogStatus = Resolve-BacklogCliStatus
     $backlogOk = $backlogStatus.Status -eq 'Ok'
@@ -1767,7 +2472,8 @@ Export-ModuleMember -Function @(
   'Copy-ConsultingSkeleton', 'Copy-ProjectOverlay',
   'Rename-ConsultingArchimateTemplates', 'Get-ConsultingTokenReplacements', 'Invoke-ConsultingTokenReplacement',
   'Remove-ConsultingClaudeLayer', 'Get-CommandExecutablePaths', 'Test-McpServerConfigured',
-  'Get-GentleAiEnvironment', 'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
+  'Get-GentleAiEnvironment', 'Get-GentleAiDualInstallDiagnosis', 'Test-GentleAiDualInstall',
+  'Install-GentleAiCliStable', 'Ensure-GentleAiCli',
   'Resolve-GentleAiScopeDecision', 'Invoke-GentleAiInstall', 'Invoke-SkillRegistryRefresh',
   'Resolve-GentleAiPreflight', 'Resolve-GentleAiCliStatus', 'Get-GentleAiEngramStatus',
   'Get-HubRegistryPath', 'Read-HubRegistry', 'Resolve-HubProjectPath', 'Migrate-HubRegistryToV2',
@@ -1775,6 +2481,11 @@ Export-ModuleMember -Function @(
   'Ensure-BacklogCli', 'Resolve-BacklogCliStatus', 'Install-BacklogCli', 'Get-BacklogManualInstallHint',
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
+  'Build-HubProjectRequires', 'Get-HubProjectRequirements', 'Test-HubToolUsable',
+  'Get-HubUsableCommandPaths', 'Sync-ProjectEnvironmentDoctorScript',
+  'Get-HubProjectEnvironmentDoctorTemplatePath', 'Invoke-HubProjectEnvironmentDoctor',
+  'Write-HubProjectEnvironmentDoctor', 'Get-HubProjectLocalMcpDoctorCheck',
+  'Get-HubProjectEnvironmentDoctorMeta', 'Get-HubToolDoctorEsMessage',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',
   'Copy-StartiaMcpPolicy', 'Write-StartiaMcpHandoffHint',
   'Invoke-OpenCursorWorkspace', 'Write-ProjectHandoffSummary',

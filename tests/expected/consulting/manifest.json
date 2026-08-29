@@ -52,6 +52,7 @@
     "docs/templates/.gitkeep",
     "PROJECT-CONTEXT.md",
     "README.md",
+    "scripts/Test-ProjectEnvironment.ps1",
     "SPEC.md",
     "transcripts/README.md"
   ],
@@ -59,7 +60,7 @@
     "startia"
   ],
   "metadata": {
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "stackProfile": "consulting-only",
     "requestedProfile": "Consulting",
     "engramMcpSource": "none",
@@ -67,7 +68,20 @@
     "includeDrawioMcp": false,
     "includeBacklogMcp": false,
     "includeArchiMcp": false,
-    "includeStartiaMcp": true
+    "includeStartiaMcp": true,
+    "requires": {
+      "version": 1,
+      "tools": [
+        {
+          "id": "pandoc",
+          "level": "optional"
+        },
+        {
+          "id": "backlog",
+          "level": "optional"
+        }
+      ]
+    }
   },
   "gentleAiMarkers": {
     "workspaceGentleAiRule": false,
