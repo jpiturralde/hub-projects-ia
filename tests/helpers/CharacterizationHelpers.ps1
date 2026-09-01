@@ -256,6 +256,10 @@ function Get-EquivalenceNormalizedContent {
           $json.PSObject.Properties.Remove($prop)
         }
       }
+      # Path-derived; differs across TestDrive folder names.
+      if ($json.PSObject.Properties.Name -contains 'engramProject') {
+        $json.engramProject = '<ENGRAM_PROJECT>'
+      }
       $text = ($json | ConvertTo-Json -Depth 30) -replace "`r`n", "`n" -replace "`r", "`n"
     } catch { }
   }
@@ -306,16 +310,28 @@ function Get-EquivalenceProjectSnapshot {
   $profilePath = Join-Path $root '.project-profile.json'
   if (Test-Path -LiteralPath $engagementPath) {
     $meta = Get-Content -LiteralPath $engagementPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp', 'includeStartiaMcp', 'requires')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'requestedProfile', 'engramMcpSource', 'gentleAiScope', 'includeDrawioMcp', 'includeBacklogMcp', 'includeArchiMcp', 'includeStartiaMcp', 'requires', 'engramProject')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
-        $metadata[$key] = if ($key -eq 'requires') { ConvertTo-EquivalenceRequiresContract -Requires $meta.requires } else { $meta.$key }
+        if ($key -eq 'requires') {
+          $metadata[$key] = ConvertTo-EquivalenceRequiresContract -Requires $meta.requires
+        } elseif ($key -eq 'engramProject') {
+          $metadata[$key] = '<ENGRAM_PROJECT>'
+        } else {
+          $metadata[$key] = $meta.$key
+        }
       }
     }
   } elseif (Test-Path -LiteralPath $profilePath) {
     $meta = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope', 'includeStartiaMcp', 'requires')) {
+    foreach ($key in @('schemaVersion', 'stackProfile', 'projectName', 'gentleAiScope', 'includeStartiaMcp', 'requires', 'engramProject')) {
       if ($meta.PSObject.Properties.Name -contains $key) {
-        $metadata[$key] = if ($key -eq 'requires') { ConvertTo-EquivalenceRequiresContract -Requires $meta.requires } else { $meta.$key }
+        if ($key -eq 'requires') {
+          $metadata[$key] = ConvertTo-EquivalenceRequiresContract -Requires $meta.requires
+        } elseif ($key -eq 'engramProject') {
+          $metadata[$key] = '<ENGRAM_PROJECT>'
+        } else {
+          $metadata[$key] = $meta.$key
+        }
       }
     }
   }

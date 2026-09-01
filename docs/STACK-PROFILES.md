@@ -35,6 +35,14 @@ Detect-only (no instala). Exit `2` si falla un tool `required` o el MCP local es
 
 `-AsJson` congelado: `{ ok, exitCode, checks[{ id, level, pass, state, message }] }` con `state` ∈ `ok|missing|failed|not-materialized|configured|broken|n/a`.
 
+### Preparar entorno (clones)
+
+Además del doctor, New/Refresh emiten `scripts/Setup-ProjectEnvironment.ps1` (**Preparar entorno**): consentimiento = ejecutarlo; remedia lo automatizable (asistente + backlog según Ensure actual), importa memoria pendiente de `.engram/` (Engram ≥1.20), sin jerga ni prompts I|X. Verificación opcional sigue siendo el doctor.
+
+Para compartir memoria con el equipo: `scripts/Publish-ProjectMemory.ps1` (**Publicar memoria del proyecto**) → delta en `.engram/` + `git add` (sin auto-commit). Revisar datos sensibles antes de commitear.
+
+Campo metadata aditivo `engramProject` (schemaVersion 4): clave canónica de sync; set-if-absent; no se sobrescribe en Refresh.
+
 Retrofit de hijos del registry: `./scripts/hub refresh --all` (mismo writer que `Refresh-ProjectGettingStarted.ps1`; sin copy-in). Manual: `pwsh -File ./scripts/Refresh-ProjectGettingStarted.ps1 -TargetPath <abs>`.
 
 ## Resolución de alcance

@@ -683,19 +683,75 @@ function Get-HubProjectEnvironmentDoctorTemplatePath {
   return (Join-Path $scriptsDir 'templates' 'Test-ProjectEnvironment.ps1')
 }
 
-function Sync-ProjectEnvironmentDoctorScript {
+function Get-HubProjectEnvironmentSetupTemplatePath {
+  $scriptsDir = Split-Path -Parent $PSScriptRoot
+  return (Join-Path $scriptsDir 'templates' 'Setup-ProjectEnvironment.ps1')
+}
+
+function Get-HubProjectEnvironmentPublishTemplatePath {
+  $scriptsDir = Split-Path -Parent $PSScriptRoot
+  return (Join-Path $scriptsDir 'templates' 'Publish-ProjectMemory.ps1')
+}
+
+function Get-HubNormalizedEngramProjectKey {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  $leaf = Split-Path -Leaf ([System.IO.Path]::GetFullPath($TargetPath))
+  $slug = ConvertTo-ConsultingSlug $leaf
+  if ([string]::IsNullOrWhiteSpace($slug)) { $slug = 'project' }
+  return $slug
+}
+
+function Read-HubExistingEngramProjectKey {
+  param([Parameter(Mandatory = $true)][string] $MetaPath)
+  if (-not (Test-Path -LiteralPath $MetaPath -PathType Leaf)) { return $null }
+  try {
+    $existing = Get-Content -LiteralPath $MetaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($existing.PSObject.Properties.Name -contains 'engramProject' -and -not [string]::IsNullOrWhiteSpace([string]$existing.engramProject)) {
+      return ([string]$existing.engramProject).Trim()
+    }
+  } catch { }
+  return $null
+}
+
+function Set-HubEngramProjectKeyIfAbsent {
+  param(
+    [Parameter(Mandatory = $true)][System.Collections.IDictionary] $Meta,
+    [Parameter(Mandatory = $true)][string] $TargetPath,
+    [string] $ExistingKey = $null
+  )
+  if (-not [string]::IsNullOrWhiteSpace($ExistingKey)) {
+    $Meta['engramProject'] = $ExistingKey.Trim()
+    return
+  }
+  if ($Meta.Contains('engramProject') -and -not [string]::IsNullOrWhiteSpace([string]$Meta['engramProject'])) {
+    return
+  }
+  $Meta['engramProject'] = Get-HubNormalizedEngramProjectKey -TargetPath $TargetPath
+}
+
+function Sync-ProjectEnvironmentScripts {
   param([Parameter(Mandatory = $true)][string] $TargetPath)
   $TargetPath = [System.IO.Path]::GetFullPath($TargetPath)
-  $template = Get-HubProjectEnvironmentDoctorTemplatePath
-  if (-not (Test-Path -LiteralPath $template -PathType Leaf)) {
-    throw "No se encuentra la plantilla del doctor de entorno: $template"
-  }
   $scriptsDir = Join-Path $TargetPath 'scripts'
   if (-not (Test-Path -LiteralPath $scriptsDir)) {
     New-Item -ItemType Directory -Path $scriptsDir -Force | Out-Null
   }
-  $dest = Join-Path $scriptsDir 'Test-ProjectEnvironment.ps1'
-  Copy-Item -LiteralPath $template -Destination $dest -Force
+  $pairs = @(
+    @{ Template = (Get-HubProjectEnvironmentDoctorTemplatePath); Dest = 'Test-ProjectEnvironment.ps1'; Label = 'doctor' }
+    @{ Template = (Get-HubProjectEnvironmentSetupTemplatePath); Dest = 'Setup-ProjectEnvironment.ps1'; Label = 'setup' }
+    @{ Template = (Get-HubProjectEnvironmentPublishTemplatePath); Dest = 'Publish-ProjectMemory.ps1'; Label = 'publish' }
+  )
+  foreach ($pair in $pairs) {
+    if (-not (Test-Path -LiteralPath $pair.Template -PathType Leaf)) {
+      throw "No se encuentra la plantilla de entorno ($($pair.Label)): $($pair.Template)"
+    }
+    Copy-Item -LiteralPath $pair.Template -Destination (Join-Path $scriptsDir $pair.Dest) -Force
+  }
+}
+
+function Sync-ProjectEnvironmentDoctorScript {
+  param([Parameter(Mandatory = $true)][string] $TargetPath)
+  Sync-ProjectEnvironmentScripts -TargetPath $TargetPath
 }
 
 function Test-HubLocalMcpJsonPathsHealthy {
@@ -965,6 +1021,9 @@ function Write-EngagementMetadata {
     if ($key -in @('requires', 'schemaVersion')) { continue }
     $meta[$key] = $Fields[$key]
   }
+  $path = Join-Path $TargetPath '.consulting-engagement.json'
+  $existingKey = Read-HubExistingEngramProjectKey -MetaPath $path
+  Set-HubEngramProjectKeyIfAbsent -Meta $meta -TargetPath $TargetPath -ExistingKey $existingKey
   $gentleScope = if ($meta.Contains('gentleAiScope')) { [string]$meta['gentleAiScope'] } else { 'none' }
   $meta['requires'] = Build-HubProjectRequires `
     -StackProfileValue $StackProfileValue `
@@ -972,9 +1031,8 @@ function Write-EngagementMetadata {
     -IncludeBacklogMcp ([bool]$(if ($meta.Contains('includeBacklogMcp')) { $meta['includeBacklogMcp'] } else { $false })) `
     -IncludeArchiMcp ([bool]$(if ($meta.Contains('includeArchiMcp')) { $meta['includeArchiMcp'] } else { $false })) `
     -GentleAiScope $gentleScope
-  $path = Join-Path $TargetPath '.consulting-engagement.json'
   [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 8) + "`n"), [System.Text.UTF8Encoding]::new($false))
-  Sync-ProjectEnvironmentDoctorScript -TargetPath $TargetPath
+  Sync-ProjectEnvironmentScripts -TargetPath $TargetPath
 }
 
 function Write-ProjectProfile {
@@ -985,6 +1043,7 @@ function Write-ProjectProfile {
     [bool] $IncludeStartiaMcp = $false
   )
   $scope = $GentleAiScope.ToLowerInvariant()
+  $path = Join-Path $TargetPath '.project-profile.json'
   $meta = [ordered]@{
     schemaVersion = 4
     stackProfile = 'gentle-ai-only'
@@ -994,9 +1053,10 @@ function Write-ProjectProfile {
     generatedAt = (Get-Date).ToString('o')
     requires = Build-HubProjectRequires -StackProfileValue 'gentle-ai-only' -GentleAiScope $scope
   }
-  $path = Join-Path $TargetPath '.project-profile.json'
+  $existingKey = Read-HubExistingEngramProjectKey -MetaPath $path
+  Set-HubEngramProjectKeyIfAbsent -Meta $meta -TargetPath $TargetPath -ExistingKey $existingKey
   [System.IO.File]::WriteAllText($path, (($meta | ConvertTo-Json -Depth 8) + "`n"), [System.Text.UTF8Encoding]::new($false))
-  Sync-ProjectEnvironmentDoctorScript -TargetPath $TargetPath
+  Sync-ProjectEnvironmentScripts -TargetPath $TargetPath
 }
 
 function Write-StackProfileConfig {
@@ -1287,16 +1347,32 @@ Copia **$CorporateDocxTemplateName** en ``docs/templates/`` desde el repositorio
   $gentleAiWorkflow = if ($StackProfile -eq 'GentleAi') {
 @"
 
-## Paso 1 - Verificar entorno
+## Paso 1 - Preparar entorno
+
+Ejecuta en la raiz del repo:
+
+``pwsh -File ./scripts/Setup-ProjectEnvironment.ps1``
+
+Prepara las herramientas del perfil e incorpora la memoria compartida del repo si existe. No hace falta conocer nombres internos de herramientas.
+
+## Paso 1b - Publicar memoria del proyecto (equipo)
+
+Cuando quieras compartir memoria del asistente con companeros:
+
+``pwsh -File ./scripts/Publish-ProjectMemory.ps1``
+
+> **Atencion:** lo exportado puede incluir informacion sensible. Revisa los archivos generados antes de hacer commit. Luego: ``git add`` de la carpeta de memoria del proyecto y commit.
+
+## Paso 2 - Verificar entorno (opcional)
 
 $prereqTable
 
 - Alcance de asistencia: **$GentleAiScope**. Los componentes administrados se heredan; **no** se duplican en ``.cursor/mcp.json``.
-- Verifica cada herramienta **obligatoria** desde el terminal o Cursor Settings (no hace falta PowerShell).
+- Verificacion opcional: ``pwsh -File ./scripts/Test-ProjectEnvironment.ps1`` (solo diagnostico).
 $mcpStateNote
 $memoryNote
 
-## Paso 2 - Siguiente accion
+## Paso 3 - Siguiente accion
 
 Ejecutá **``/start-task``** para arrancar.
 "@
@@ -1305,17 +1381,33 @@ Ejecutá **``/start-task``** para arrancar.
   $consultingBody = if ($isConsulting) {
 @"
 
-## Paso 1 - Verificar entorno
+## Paso 1 - Preparar entorno
+
+Ejecuta en la raiz del repo:
+
+``pwsh -File ./scripts/Setup-ProjectEnvironment.ps1``
+
+Prepara las herramientas del perfil e incorpora la memoria compartida del repo si existe.
+
+## Paso 1b - Publicar memoria del proyecto (equipo)
+
+Cuando quieras compartir memoria del asistente con companeros:
+
+``pwsh -File ./scripts/Publish-ProjectMemory.ps1``
+
+> **Atencion:** lo exportado puede incluir informacion sensible. Revisa los archivos generados antes de hacer commit. Luego: ``git add`` de la carpeta de memoria del proyecto y commit.
+
+## Paso 2 - Verificar entorno (opcional)
 
 $prereqTable
 
-Comprueba cada herramienta **obligatoria** (version usable en PATH o instalacion nativa). **No** hace falta ejecutar scripts PowerShell para esta verificacion.
+Comprueba herramientas **obligatorias** si Preparar entorno indico gaps. Verificacion opcional: ``pwsh -File ./scripts/Test-ProjectEnvironment.ps1``.
 $mcpStateNote
 $memoryNote
 
 Detalle por SO: [MCP-PREREQUISITOS.md](MCP-PREREQUISITOS.md).
 
-## Paso 2 - Confirmar metadata del encargo
+## Paso 3 - Confirmar metadata del encargo
 
 Revisa ``.consulting-engagement.json`` (cliente, iniciativa, MCP toggles, ``stackProfile``, ``requires``).
 $consultingWorkflow
@@ -3095,8 +3187,11 @@ Export-ModuleMember -Function @(
   'Get-ConsultingMcpServers', 'Write-ConsultingMcpJson', 'Write-EngagementMetadata',
   'Write-ProjectProfile', 'Write-StackProfileConfig', 'Test-ConsultingPlaceholders',
   'Build-HubProjectRequires', 'Get-HubProjectRequirements', 'Test-HubToolUsable',
-  'Get-HubUsableCommandPaths', 'Sync-ProjectEnvironmentDoctorScript',
-  'Get-HubProjectEnvironmentDoctorTemplatePath', 'Invoke-HubProjectEnvironmentDoctor',
+  'Get-HubUsableCommandPaths', 'Sync-ProjectEnvironmentDoctorScript', 'Sync-ProjectEnvironmentScripts',
+  'Get-HubProjectEnvironmentDoctorTemplatePath', 'Get-HubProjectEnvironmentSetupTemplatePath',
+  'Get-HubProjectEnvironmentPublishTemplatePath', 'Get-HubNormalizedEngramProjectKey',
+  'Set-HubEngramProjectKeyIfAbsent', 'Read-HubExistingEngramProjectKey',
+  'Invoke-HubProjectEnvironmentDoctor',
   'Write-HubProjectEnvironmentDoctor', 'Get-HubProjectLocalMcpDoctorCheck',
   'Get-HubProjectEnvironmentDoctorMeta', 'Get-HubToolDoctorEsMessage',
   'Write-ProjectOnboardingPending', 'Write-ProjectGettingStarted', 'Update-ProjectGettingStartedFromMetadata', 'Copy-ProjectOnboardingLayer',

@@ -38,3 +38,9 @@ node_modules/
 
 # MCP local (rutas por máquina; versionar mcp.json.example)
 .cursor/mcp.json
+
+# Engram Git Sync: versionar manifest + chunks; no la DB local
+.engram/*.db
+.engram/*.db-shm
+.engram/*.db-wal
+.engram/engram.db*

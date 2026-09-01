@@ -34,6 +34,16 @@ Invoke-Pester ./tests/equivalence        # Fase 10 — manifiestos normalizados
 Invoke-Pester ./tests
 ```
 
+## Ensure↔portable parity (doctor-install)
+
+Checklist for `scripts/templates/Setup-ProjectEnvironment.ps1` vs hub Ensure-*:
+
+- gentle-ai: non-interactive install (go install / Choice I equivalent) when required
+- backlog: non-interactive `npm install -g backlog.md@latest --include=optional` when required (after node/npm OK)
+- dual-GA / WSL Windows-origin: hard-fail **before** any Ensure mutation
+- never write Engram into child `.cursor/mcp.json`
+- never `gentle-ai sync` / `upgrade` from Setup
+
 ## Estructura
 
 | Ruta | Propósito |

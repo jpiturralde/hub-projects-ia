@@ -35,7 +35,25 @@ Explica:
 
 Pregunta: "¿Ya tenes esta carpeta abierta como workspace raiz?" Si no, detente hasta que confirme.
 
-### Paso 1 — Verificar entorno desde `requires` (sin PowerShell)
+### Paso 1 — Preparar entorno (clones)
+
+Antes de asumir que el suite esta listo, guia ejecutar en la raiz del repo:
+
+```text
+pwsh -File ./scripts/Setup-ProjectEnvironment.ps1
+```
+
+(GETTING-STARTED lo llama **Preparar entorno**.) No hace falta que el usuario conozca nombres internos de herramientas.
+
+Cuando deba **compartir memoria del asistente** con el equipo, menciona **Publicar memoria del proyecto**:
+
+```text
+pwsh -File ./scripts/Publish-ProjectMemory.ps1
+```
+
+Luego `git add .engram/` + commit, tras revisar datos sensibles.
+
+### Paso 2 — Verificar entorno desde `requires` (sin PowerShell)
 
 Lee `requires.tools[]` (ids con `level` required|optional). Si `requires` no existe (schema menor a 4), deriva con los mismos toggles que la metadata:
 
@@ -53,7 +71,7 @@ Lee `requires.tools[]` (ids con `level` required|optional). Si `requires` no exi
 - Para ConsultingAI/GentleAi, verificar Engram por separado como integración administrada por Gentle AI. No agregarlo al MCP local.
 - Si **archi** o **backlog** tienen rutas placeholder, indicar editar `.cursor/mcp.json` (ver `docs/MCP-PREREQUISITOS.md`).
 
-Para cada herramienta **obligatoria**, guia una verificacion **sin PowerShell**:
+Para cada herramienta **obligatoria**, guia una verificacion **sin PowerShell** (o confirma que Preparar entorno ya la cubrio):
 
 - `node` / `npm` / `npx` / `pandoc` / `backlog`: comando `--version` (o equivalente) en la terminal del usuario.
 - `archi`: confirmar instalacion / ruta configurada segun `docs/MCP-PREREQUISITOS.md`.
@@ -68,11 +86,11 @@ Opcionales: informar si faltan; no bloquear el onboarding.
 
 Guia a **Cursor Settings -> MCP** para ver servidores locales en verde. Si hay placeholders en archi/backlog, indicar editar `.cursor/mcp.json`.
 
-### Paso 2 — Metadata del encargo
+### Paso 3 — Metadata del encargo
 
-Resumir en 3-5 lineas: cliente, iniciativa, `stackProfile`, toggles MCP y resumen de `requires` (herramientas obligatorias).
+Resumir en 3-5 lineas: cliente, iniciativa, `stackProfile`, toggles MCP, `engramProject` y resumen de `requires` (herramientas obligatorias).
 
-### Paso 3 — Siguiente accion segun perfil
+### Paso 4 — Siguiente accion segun perfil
 
 | Perfil | Proximo paso |
 |--------|--------------|
@@ -82,7 +100,7 @@ Resumir en 3-5 lineas: cliente, iniciativa, `stackProfile`, toggles MCP y resume
 
 Mencionar **`docs/GETTING-STARTED.md`** como referencia permanente.
 
-### Paso 4 — Cierre
+### Paso 5 — Cierre
 
 1. Crear o actualizar **`.atl/onboarding-complete.json`**:
 
@@ -102,13 +120,12 @@ Mencionar **`docs/GETTING-STARTED.md`** como referencia permanente.
 
 Si el usuario dice "rapido" o "solo lo esencial":
 
-1. Workspace raiz + entorno obligatorio OK (2 frases; sin exigir scripts `.ps1`).
-2. Un solo proximo paso segun perfil (tabla del Paso 3).
-3. Marcar onboarding completo (Paso 4).
+1. Workspace raiz + **Preparar entorno** OK (2 frases).
+2. Un solo proximo paso segun perfil (tabla del Paso 4).
+3. Marcar onboarding completo (Paso 5).
 
 ## Prohibido
 
 - No iniciar bootstrap, CDD o SDD automáticamente sin confirmación del usuario.
 - No editar `transcripts/` ni entregables al cliente durante onboarding.
-- No exigir PowerShell ni scripts `.ps1` al cliente para verificar el entorno.
 - No escribir servidores de memoria en el MCP local del hijo.
