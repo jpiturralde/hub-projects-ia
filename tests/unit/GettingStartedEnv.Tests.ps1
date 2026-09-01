@@ -39,8 +39,11 @@ Describe 'Write-ProjectGettingStarted environment checklist (Phase 2)' {
     $text | Should -Match 'Aun no materializado'
     $text | Should -Match 'Con problemas \(roto\)'
     $text | Should -Match 'siempre es un fallo'
-    $text | Should -Match 'No.*hace falta.*PowerShell|no hace falta PowerShell|No.*scripts PowerShell'
-    $text | Should -Not -Match '(?i)ejecut[ae].*\.ps1'
+    $text | Should -Match 'Preparar entorno'
+    $text | Should -Match 'Setup-ProjectEnvironment\.ps1'
+    $text | Should -Match 'Publicar memoria'
+    $text | Should -Match 'Publish-ProjectMemory\.ps1'
+    $text | Should -Match 'sensible'
     $text | Should -Not -Match '(?i)servidores esperados \(\*\*engram'
     $text | Should -Match 'hub generador padre'
   }

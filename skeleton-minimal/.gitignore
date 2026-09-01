@@ -1,2 +1,8 @@
 .atl/
 .cursor/mcp.json
+
+# Engram Git Sync transport (DB local ignored)
+.engram/*.db
+.engram/*.db-shm
+.engram/*.db-wal
+.engram/engram.db*

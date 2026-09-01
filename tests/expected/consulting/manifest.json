@@ -53,6 +53,8 @@
     "PROJECT-CONTEXT.md",
     "README.md",
     "scripts/Test-ProjectEnvironment.ps1",
+    "scripts/Setup-ProjectEnvironment.ps1",
+    "scripts/Publish-ProjectMemory.ps1",
     "SPEC.md",
     "transcripts/README.md"
   ],

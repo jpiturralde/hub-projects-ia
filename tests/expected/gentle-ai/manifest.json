@@ -14,7 +14,9 @@
     "docs/GETTING-STARTED.md",
     "PROJECT-CONTEXT.md",
     "README.md",
-    "scripts/Test-ProjectEnvironment.ps1"
+    "scripts/Test-ProjectEnvironment.ps1",
+    "scripts/Setup-ProjectEnvironment.ps1",
+    "scripts/Publish-ProjectMemory.ps1"
   ],
   "mcpServers": [
     "startia"
